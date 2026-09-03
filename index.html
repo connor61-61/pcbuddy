@@ -1,37 +1,168 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PCBuddy</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCBuddy</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    background: #0f1117;
+    color: #e6e6e6;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+    margin: 0;
+  }
+  .card {
+    background: #171a23;
+    border: 1px solid #262b38;
+    border-radius: 14px;
+    padding: 32px;
+    max-width: 480px;
+    width: 100%;
+  }
+  h1 { margin-top: 0; font-size: 28px; }
+  p.sub { color: #9aa0ac; margin-top: -8px; }
+  label { display: block; margin: 16px 0 6px; font-size: 14px; color: #c7cbd4; }
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2f3444;
+    background: #0f1117;
+    color: #e6e6e6;
+    font-size: 15px;
+  }
+  button {
+    margin-top: 24px;
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #4f7dff;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: #3d67e0; }
+  #results {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #262b38;
+    display: none;
+  }
+  .rec {
+    background: #0f1117;
+    border: 1px solid #2f3444;
+    border-left: 4px solid #4f7dff;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .rec.priority { border-left-color: #ff6b6b; }
+</style>
 </head>
-
 <body>
 
-    <h1>PCBuddy</h1>
-    <p>Find out what your PC should upgrade next.</p>
+<div class="card">
+  <h1>PCBuddy</h1>
+  <p class="sub">Find out what your PC should upgrade next.</p>
 
-    <h2>Enter Your PC</h2>
+  <label for="cpu">CPU</label>
+  <input type="text" id="cpu" placeholder="Example: i5-12400F">
 
-    <label>CPU:</label>
-    <input type="text" placeholder="Example: i5-12400F">
-    <br><br>
+  <label for="gpu">GPU</label>
+  <input type="text" id="gpu" placeholder="Example: RTX 2070">
 
-    <label>GPU:</label>
-    <input type="text" placeholder="Example: RTX 2070">
-    <br><br>
+  <label for="ram">RAM</label>
+  <select id="ram">
+    <option value="8">8GB</option>
+    <option value="16" selected>16GB</option>
+    <option value="32">32GB</option>
+    <option value="64">64GB</option>
+  </select>
 
-    <label>RAM:</label>
-    <select>
-        <option>8GB</option>
-        <option>16GB</option>
-        <option>32GB</option>
-        <option>64GB</option>
-    </select>
+  <button onclick="analyzePC()">Analyze My PC</button>
 
-    <br><br>
+  <div id="results"></div>
+</div>
 
-    <button>Analyze My PC</button>
+<script>
+function getGpuTier(gpu) {
+  gpu = gpu.toUpperCase();
+  const match = gpu.match(/(RTX|GTX|RX)\s?(\d{3,4})/);
+  if (!match) return null;
+  const series = match[1];
+  const num = parseInt(match[2]);
 
-</body>
-</html>
+  if (series === "RTX") {
+    if (num >= 4000) return 9;
+    if (num >= 3000) return 7;
+    if (num >= 2000) return 5;
+  }
+  if (series === "GTX") {
+    if (num >= 1600) return 4;
+    if (num >= 1000) return 3;
+    return 1;
+  }
+  if (series === "RX") {
+    if (num >= 7000) return 8;
+    if (num >= 6000) return 6;
+    if (num >= 5000) return 4;
+    return 2;
+  }
+  return null;
+}
+
+function getCpuTier(cpu) {
+  cpu = cpu.toUpperCase();
+  const intel = cpu.match(/I([3579])-?(\d{2,5})/);
+  const ryzen = cpu.match(/RYZEN\s?([3579])\s?(\d{4})/);
+
+  if (intel) {
+    const tier = parseInt(intel[1]);
+    const gen = parseInt(intel[2].toString().slice(0, intel[2].length > 4 ? 2 : 1));
+    return tier * 2 + Math.min(gen, 14) * 0.5;
+  }
+  if (ryzen) {
+    const tier = parseInt(ryzen[1]);
+    const gen = parseInt(ryzen[2].toString()[0]);
+    return tier * 2 + gen * 0.7;
+  }
+  return null;
+}
+
+function analyzePC() {
+  const cpu = document.getElementById("cpu").value.trim();
+  const gpu = document.getElementById("gpu").value.trim();
+  const ram = parseInt(document.getElementById("ram").value);
+
+  const results = document.getElementById("results");
+  results.innerHTML = "";
+  results.style.display = "block";
+
+  const recs = [];
+
+  const cpuTier = cpu ? getCpuTier(cpu) : null;
+  const gpuTier = gpu ? getGpuTier(gpu) : null;
+
+  if (ram <= 8) {
+    recs.push({ text: "Upgrade RAM to 16GB. 8GB is a real bottleneck for modern games and multitasking, and it's usually the cheapest upgrade you can make.", priority: true });
+  }
+
+  if (cpuTier !== null && gpuTier !== null) {
+    const diff = gpuTier - cpuTier;
+    if (diff > 2.5) {
+      recs.push({ text: `Your GPU looks noticeably stronger than your CPU (${cpu}). The CPU is likely holding back your GPU's performance — a CPU upgrade would give the biggest gains.`, priority: true });
+    } else if (diff < -2.5) {
+      recs.push({ text: `Your CPU looks noticeably stronger than your GPU (${gpu}). The GPU is your main bottleneck for gaming performance.`, priority: true });
+    } else {
+      recs.push({ text: "Your CPU and GPU look reasonably balanced for each other." });
+    }
+  } else {
+    if (!cpuTier && cpu) recs.push({ text: `Couldn't recognize
