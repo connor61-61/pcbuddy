@@ -1,12 +1,27 @@
-const express = require("express");
+const http = require("http");
+const fs = require("fs");
 const path = require("path");
-
-const app = express();
 
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname)));
+const server = http.createServer((req, res) => {
+    const filePath = path.join(__dirname, "index.html");
 
-app.listen(PORT, "0.0.0.0", () => {
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            res.writeHead(500);
+            res.end("Error loading PCBuddy.");
+            return;
+        }
+
+        res.writeHead(200, {
+            "Content-Type": "text/html"
+        });
+
+        res.end(content);
+    });
+});
+
+server.listen(PORT, "0.0.0.0", () => {
     console.log(`PCBuddy is running on port ${PORT}`);
 });
