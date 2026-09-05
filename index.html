@@ -1,0 +1,3090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0d0a">
+<title>PCBuddy — PC hardware diagnostic &amp; upgrade planner</title>
+<meta name="description" content="Enter your full PC spec and get a health score, FPS estimates in popular games, build value, and specific upgrade suggestions.">
+<meta property="og:title" content="PCBuddy">
+<meta property="og:description" content="Find out what your PC should upgrade next.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%230a0d0a'/%3E%3Crect x='9' y='9' width='14' height='14' fill='none' stroke='%23cf8a4f' stroke-width='2'/%3E%3Crect x='13' y='13' width='6' height='6' fill='%237fd1a0'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d0a;
+    --bg-panel:#10160f;
+    --bg-panel2:#0c110c;
+    --line:#243228;
+    --line-soft:#182119;
+    --copper:#cf8a4f;
+    --copper-bright:#e8a868;
+    --signal:#7fd1a0;
+    --alert:#e2665a;
+    --warn:#e3b25f;
+    --blue:#8fb3ff;
+    --text:#e9efe7;
+    --text-dim:#8a9a8d;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    color: var(--text);
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px 64px;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 3px 3px, rgba(207,138,79,0.16) 1.4px, transparent 1.6px),
+      linear-gradient(rgba(127,209,160,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127,209,160,0.05) 1px, transparent 1px),
+      radial-gradient(circle at 18% 8%, rgba(207,138,79,0.10), transparent 42%),
+      radial-gradient(circle at 84% 88%, rgba(127,209,160,0.08), transparent 45%);
+    background-size: 64px 64px, 64px 64px, 64px 64px, auto, auto;
+    background-attachment: fixed;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+  .bg-layer{ position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .bg-layer svg{ position: absolute; }
+  .bg-layer .cpu{ top: -60px; left: -70px; width: 420px; height: 420px; color: var(--copper); opacity: 0.07; }
+  .bg-layer .gpu{ bottom: -90px; right: -110px; width: 620px; height: 300px; color: var(--signal); opacity: 0.06; }
+  .bg-layer .ram{ top: 12%; right: -30px; width: 150px; height: 340px; color: var(--warn); opacity: 0.06; transform: rotate(10deg); }
+  .bg-layer .mobo{ bottom: 6%; left: -140px; width: 520px; height: 520px; color: var(--copper); opacity: 0.05; }
+  @media (max-width: 860px){ .bg-layer .ram, .bg-layer .mobo{ display:none; } .bg-layer .cpu, .bg-layer .gpu{ opacity:0.045; } }
+  .wrap { max-width: 900px; width: 100%; position: relative; }
+  .chassis-head{ margin-bottom: 22px; }
+  .plate{
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    padding: 15px 22px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--bg-panel), var(--bg-panel2));
+    clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
+  }
+  .plate-id{ display: flex; align-items: center; gap: 14px; }
+  .led{ width: 9px; height: 9px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 9px var(--signal); animation: blink 2.6s ease-in-out infinite; flex-shrink:0; }
+  @keyframes blink{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
+  .brand-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 19px; letter-spacing: 0.3px; }
+  .brand-sub{ font-size: 12.5px; color: var(--text-dim); margin-top: 1px; }
+  .plate-tag{ font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.4px; }
+  .chassis{
+    position: relative;
+    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel2) 100%);
+    border: 1px solid var(--line);
+    clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
+    padding: 40px 44px;
+    box-shadow: 0 30px 70px rgba(0,0,0,0.35);
+    margin-bottom: 24px;
+  }
+  @media (max-width: 620px){ .chassis{ padding: 30px 22px; } }
+  .screws{ position: absolute; inset: 0; pointer-events: none; }
+  .screws span{ position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--line); box-shadow: inset 0 0 0 1px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.02); }
+  .screws span:nth-child(1){ top: 13px; left: 13px; }
+  .screws span:nth-child(2){ top: 13px; right: 34px; }
+  .screws span:nth-child(3){ bottom: 34px; left: 13px; }
+  .screws span:nth-child(4){ bottom: 13px; right: 13px; }
+  h1{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 32px; letter-spacing: -0.3px; margin: 0 0 8px; max-width: 26ch;
+    background: linear-gradient(90deg, #cfe4d7, #f0c896);
+    -webkit-background-clip: text; background-clip: text; color: transparent; display: inline-block; }
+  p.sub{ color: var(--text-dim); margin: 0 0 6px; font-size: 15.5px; max-width: 56ch; }
+  p.sub.small{ font-size: 13px; margin: 4px 0 0; }
+  .rail-label{ display: flex; align-items: center; gap: 10px; margin: 34px 0 16px; font-size: 13.5px; color: var(--copper); font-weight: 600; }
+  .rail-label:first-of-type{ margin-top: 30px; }
+  .rail-label .dot{ width: 6px; height: 6px; background: var(--copper); border-radius: 50%; flex-shrink:0; }
+  .rail-label::after{ content:""; flex:1; height:1px; background: var(--line); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid2 + .grid2{ margin-top: 20px; }
+  @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }
+  label { display: block; margin: 0 0 8px; font-size: 14.5px; color: #c7cbd4; font-weight: 500; }
+  .field { position: relative; }
+  input[type="text"], select {
+    width: 100%;
+    padding: 13px 15px;
+    border: 1px solid var(--line);
+    border-bottom: 2px solid var(--line);
+    background: rgba(255,255,255,0.015);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 15px;
+    outline: none;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  select{ cursor: pointer; color-scheme: dark; }
+  option{ background: var(--bg-panel); color: var(--text); }
+  input[type="text"]:focus, select:focus {
+    border-color: var(--copper);
+    box-shadow: 0 0 0 3px rgba(207,138,79,0.16);
+  }
+  .autocomplete-list {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: #0e130f; border: 1px solid var(--line);
+    max-height: 260px; overflow-y: auto; z-index: 20; display: none;
+    box-shadow: 0 16px 34px rgba(0,0,0,0.45);
+  }
+  .autocomplete-list.open { display: block; }
+  .ac-item { padding: 10px 15px; cursor: pointer; font-size: 14.5px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line-soft); }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover, .ac-item.active { background: #161f18; }
+  .ac-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .preview { display: none; align-items: center; gap: 11px; margin-top: 10px; padding: 9px 12px; background: rgba(255,255,255,0.02); border-left: 2px solid var(--line); font-size: 13.5px; color: #b6bac4; }
+  .preview.show { display: flex; }
+  .preview .badge { font-family:'IBM Plex Mono',monospace; font-size: 11px; font-weight: 600; padding: 2px 7px; }
+  button.analyze {
+    margin-top: 34px; width: 100%; padding: 16px; border: none;
+    background: linear-gradient(90deg, var(--copper), var(--copper-bright));
+    color: #0a0d0a; font-size: 16px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif;
+    cursor: pointer; clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  button.analyze:hover { box-shadow: 0 10px 28px rgba(207,138,79,0.32); transform: translateY(-1px); }
+  button.analyze:active { transform: translateY(0); }
+  button:focus-visible, input:focus-visible, select:focus-visible, .legend-chip:focus-visible { outline: 2px solid var(--copper-bright); outline-offset: 2px; }
+  #loading { display: none; align-items: center; gap: 10px; margin-top: 24px; color: var(--text-dim); font-size: 13.5px; font-family: 'IBM Plex Mono', monospace; }
+  #loading.show { display: flex; }
+  .spinner { width: 15px; height: 15px; border: 2px solid var(--line); border-top-color: var(--copper); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #results { margin-top: 8px; display: none; }
+  .gauge-block{ display: flex; align-items: center; gap: 30px; flex-wrap: wrap; padding-top: 6px; }
+  .gauge-ring{
+    --score: 0; width: 156px; height: 156px; border-radius: 50%; flex-shrink: 0;
+    background: conic-gradient(var(--gauge-color, var(--copper)) calc(var(--score) * 1%), var(--line) 0);
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .gauge-ring::before{ content:""; position: absolute; inset: 13px; border-radius: 50%; background: var(--bg-panel); }
+  .gauge-center{ position: relative; z-index: 1; text-align: center; }
+  .gauge-num{ font-family: 'IBM Plex Mono', monospace; font-size: 38px; font-weight: 600; line-height: 1; }
+  .gauge-num span{ font-size: 14px; color: var(--text-dim); }
+  .gauge-tag{ font-size: 11px; color: var(--text-dim); margin-top: 4px; letter-spacing: 0.3px; }
+  .meters{ flex: 1; min-width: 220px; }
+  .meter-row{ margin-bottom: 11px; }
+  .meter-row:last-child{ margin-bottom: 0; }
+  .meter-label{ display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-family: 'IBM Plex Mono', monospace; }
+  .meter-track{ height: 8px; background: var(--line); position: relative; overflow: hidden; }
+  .meter-fill{ height: 100%; }
+  .meter-track::after{ content:""; position: absolute; inset: 0; background-image: repeating-linear-gradient(90deg, var(--bg-panel) 0 2px, transparent 2px 9px); pointer-events: none; }
+  .top-fix{ margin-top: 22px; padding: 14px 16px; border-left: 2px solid var(--copper); background: linear-gradient(90deg, rgba(207,138,79,0.08), transparent); font-size: 13.5px; line-height: 1.6; }
+  .top-fix .top-fix-title{ font-size: 11px; color: var(--copper); text-transform: none; margin-bottom: 6px; font-weight: 600; }
+  .top-fix div.item{ color: var(--text); margin-bottom: 5px; }
+  .top-fix div.item:last-child{ margin-bottom: 0; }
+  details.howcalc { margin-top: 20px; font-size: 13px; color: var(--text-dim); }
+  details.howcalc summary { cursor: pointer; color: var(--copper); }
+  details.howcalc p { margin: 8px 0 0; line-height: 1.6; }
+  .rail{ position: relative; margin-top: 28px; padding-left: 22px; }
+  .rail::before{ content:""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 1px; background: var(--line); }
+  .rail-item{ position: relative; padding: 14px 0; border-bottom: 1px solid var(--line-soft); }
+  .rail-item:last-child{ border-bottom: none; }
+  .rail-item::before{ content:""; position: absolute; left: -22px; top: 20px; width: 8px; height: 8px; background: var(--text-dim); }
+  .rail-item.is-priority::before{ background: var(--alert); box-shadow: 0 0 8px rgba(226,102,90,.55); }
+  .rail-item.is-good::before{ background: var(--signal); box-shadow: 0 0 6px rgba(127,209,160,.4); }
+  .rail-item.is-warn::before{ background: var(--warn); box-shadow: 0 0 6px rgba(227,178,95,.4); }
+  .rail-item p{ margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--text); }
+  .rail-item ul{ margin: 10px 0 0; padding: 0; list-style: none; }
+  .rail-item li{ display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; padding: 7px 0; border-top: 1px dashed var(--line); }
+  .rail-item li:first-child{ border-top: none; }
+  .rail-item .price{ color: var(--signal); }
+  .rail-item .shop-link{ margin-left: auto; color: var(--copper); text-decoration: none; font-size: 12px; border-bottom: 1px solid transparent; }
+  .rail-item .shop-link:hover{ border-bottom-color: var(--copper); }
+  .readout-table{ width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; margin-top: 6px; }
+  .readout-table th{ text-align: left; font-weight: 500; color: var(--text-dim); font-size: 11px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
+  .readout-table th.num{ text-align: right; }
+  .readout-table td{ padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .readout-table tr:last-child td{ border-bottom: none; }
+  .readout-table td.fps{ text-align: right; font-weight: 600; }
+  .value-list{ margin-top: 6px; }
+  .value-list .v-row{ display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+  .value-list .v-row span:last-child{ font-family: 'IBM Plex Mono', monospace; color: var(--text-dim); }
+  .value-list .v-total{ display: flex; justify-content: space-between; padding-top: 14px; margin-top: 6px; border-top: 2px solid var(--copper); font-weight: 700; font-size: 18px; font-family: 'IBM Plex Mono', monospace; }
+  .bv-note{ margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+  .section-block{ margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
+  .section-title{ font-family: 'Archivo', sans-serif; font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .footer { margin-top: 30px; padding: 0 8px; font-size: 12.5px; color: #6b7180; line-height: 1.75; text-align: center; }
+  .footer a { color: var(--copper); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="bg-layer" aria-hidden="true">
+  <svg class="cpu" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="50" y="50" width="100" height="100" stroke="currentColor" stroke-width="2"/>
+    <rect x="70" y="70" width="60" height="60" stroke="currentColor" stroke-width="1.4"/>
+    <g stroke="currentColor" stroke-width="1.4">
+      <line x1="30" y1="60" x2="50" y2="60"/><line x1="30" y1="75" x2="50" y2="75"/><line x1="30" y1="90" x2="50" y2="90"/>
+      <line x1="30" y1="105" x2="50" y2="105"/><line x1="30" y1="120" x2="50" y2="120"/><line x1="30" y1="135" x2="50" y2="135"/>
+      <line x1="150" y1="60" x2="170" y2="60"/><line x1="150" y1="75" x2="170" y2="75"/><line x1="150" y1="90" x2="170" y2="90"/>
+      <line x1="150" y1="105" x2="170" y2="105"/><line x1="150" y1="120" x2="170" y2="120"/><line x1="150" y1="135" x2="170" y2="135"/>
+      <line x1="60" y1="30" x2="60" y2="50"/><line x1="75" y1="30" x2="75" y2="50"/><line x1="90" y1="30" x2="90" y2="50"/>
+      <line x1="105" y1="30" x2="105" y2="50"/><line x1="120" y1="30" x2="120" y2="50"/><line x1="135" y1="30" x2="135" y2="50"/>
+      <line x1="60" y1="150" x2="60" y2="170"/><line x1="75" y1="150" x2="75" y2="170"/><line x1="90" y1="150" x2="90" y2="170"/>
+      <line x1="105" y1="150" x2="105" y2="170"/><line x1="120" y1="150" x2="120" y2="170"/><line x1="135" y1="150" x2="135" y2="170"/>
+    </g>
+    <circle cx="58" cy="58" r="2" fill="currentColor"/>
+  </svg>
+  <svg class="gpu" viewBox="0 0 340 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="10" width="320" height="120" rx="3" stroke="currentColor" stroke-width="2"/>
+    <circle cx="95" cy="70" r="46" stroke="currentColor" stroke-width="1.4"/>
+    <circle cx="235" cy="70" r="46" stroke="currentColor" stroke-width="1.4"/>
+    <g stroke="currentColor" stroke-width="1.1">
+      <line x1="95" y1="24" x2="95" y2="116"/><line x1="49" y1="70" x2="141" y2="70"/>
+      <line x1="61" y1="36" x2="129" y2="104"/><line x1="129" y1="36" x2="61" y2="104"/>
+      <line x1="235" y1="24" x2="235" y2="116"/><line x1="189" y1="70" x2="281" y2="70"/>
+      <line x1="201" y1="36" x2="269" y2="104"/><line x1="269" y1="36" x2="201" y2="104"/>
+    </g>
+    <g stroke="currentColor" stroke-width="1"><line x1="10" y1="141" x2="330" y2="141"/><line x1="10" y1="148" x2="330" y2="148"/></g>
+  </svg>
+  <svg class="ram" viewBox="0 0 100 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 10H80V230C80 235 76 240 70 240H30C24 240 20 235 20 230V10Z" stroke="currentColor" stroke-width="2"/>
+    <rect x="30" y="30" width="40" height="24" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="30" y="70" width="40" height="24" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="30" y="110" width="40" height="24" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="30" y="150" width="40" height="24" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="30" y="190" width="40" height="20" stroke="currentColor" stroke-width="1.2"/>
+    <path d="M20 200 L10 210 L20 220" stroke="currentColor" stroke-width="1.2"/>
+  </svg>
+  <svg class="mobo" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="10" width="380" height="380" stroke="currentColor" stroke-width="2"/>
+    <rect x="60" y="60" width="90" height="90" stroke="currentColor" stroke-width="1.4"/>
+    <g stroke="currentColor" stroke-width="1"><line x1="180" y1="50" x2="180" y2="220"/><line x1="200" y1="50" x2="200" y2="220"/><line x1="220" y1="50" x2="220" y2="220"/><line x1="240" y1="50" x2="240" y2="220"/></g>
+    <rect x="60" y="260" width="280" height="20" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="60" y="300" width="180" height="16" stroke="currentColor" stroke-width="1.2"/>
+    <g stroke="currentColor" stroke-width="0.8">
+      <path d="M150 150 H300 V60"/>
+      <path d="M60 200 H40 V340"/>
+      <path d="M340 200 H360 V60"/>
+    </g>
+    <circle cx="340" cy="340" r="10" stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="340" cy="340" r="4" fill="currentColor"/>
+  </svg>
+</div>
+<div class="wrap">
+  <div class="chassis-head">
+    <div class="plate">
+      <div class="plate-id">
+        <span class="led" id="status-led"></span>
+        <div>
+          <div class="brand-name">PCBuddy</div>
+          <div class="brand-sub">Know what to upgrade before you spend a dollar</div>
+        </div>
+      </div>
+      <div class="plate-tag">BUILD ANALYSIS TOOL · REV 3</div>
+    </div>
+  </div>
+  <main class="chassis" id="form-panel">
+    <div class="screws"><span></span><span></span><span></span><span></span></div>
+    <h1>What should your PC upgrade next?</h1>
+    <p class="sub">Enter your full spec below and get a health score, FPS estimates, and specific upgrade suggestions.</p>
+    <details class="howcalc" style="margin: 16px 0 0;">
+      <summary>Not sure what parts you have? Click here</summary>
+      <p><strong>Windows:</strong> Press <code>Ctrl+Shift+Esc</code> to open Task Manager, then click the <strong>Performance</strong> tab. Click <strong>CPU</strong> on the left to see your processor name in the top-right corner, and click <strong>GPU</strong> to see your graphics card name. The <strong>Memory</strong> tab shows your installed RAM.</p>
+      <p>For a fuller readout, press <code>Win + R</code>, type <code>dxdiag</code>, and hit Enter — the System tab lists your CPU and RAM, and the Display tab lists your GPU.</p>
+      <p>You can also check <strong>Settings → System → About</strong> for your CPU and RAM at a glance, or open Device Manager and expand <strong>Display adapters</strong> for your GPU.</p>
+      <p><strong>Mac:</strong> Click the Apple menu → <strong>About This Mac</strong> to see your chip and memory. Most Macs use integrated graphics, so there's usually no separate GPU to enter.</p>
+    </details>
+    <div class="rail-label"><span class="dot"></span><span>Core components</span></div>
+    <div class="grid2">
+      <div>
+        <label for="cpu">CPU</label>
+        <div class="field">
+          <input type="text" id="cpu" placeholder="Start typing a CPU, like Intel Core i7" autocomplete="off">
+          <div class="autocomplete-list" id="cpu-ac"></div>
+        </div>
+        <div class="preview" id="cpu-preview"></div>
+      </div>
+      <div>
+        <label for="gpu">GPU</label>
+        <div class="field">
+          <input type="text" id="gpu" placeholder="Start typing a GPU, like NVIDIA RTX" autocomplete="off">
+          <div class="autocomplete-list" id="gpu-ac"></div>
+        </div>
+        <div class="preview" id="gpu-preview"></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="ram">RAM</label>
+        <select id="ram">
+          <option value="8">8GB</option>
+          <option value="16" selected>16GB</option>
+          <option value="32">32GB</option>
+          <option value="64">64GB</option>
+        </select>
+      </div>
+      <div>
+        <label for="mobo">Motherboard</label>
+        <div class="field">
+          <input type="text" id="mobo" placeholder="Start typing a board, like ASUS Z790" autocomplete="off">
+          <div class="autocomplete-list" id="mobo-ac"></div>
+        </div>
+        <div class="preview" id="mobo-preview"></div>
+      </div>
+    </div>
+    <div class="rail-label"><span class="dot"></span><span>Storage &amp; power</span></div>
+    <div class="grid2">
+      <div>
+        <label for="storagetype">Storage type</label>
+        <select id="storagetype">
+          <option value="hdd">Hard drive (HDD) only</option>
+          <option value="sata_ssd">SATA SSD</option>
+          <option value="nvme_ssd" selected>NVMe SSD</option>
+        </select>
+      </div>
+      <div>
+        <label for="storagecap">Storage capacity</label>
+        <select id="storagecap">
+          <option value="128">128GB</option>
+          <option value="256">256GB</option>
+          <option value="512" selected>512GB</option>
+          <option value="1024">1TB</option>
+          <option value="2048">2TB or more</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="psu">Power supply</label>
+        <select id="psu">
+          <option value="notsure">Not sure</option>
+          <option value="450">450W</option>
+          <option value="550" selected>550W</option>
+          <option value="650">650W</option>
+          <option value="750">750W</option>
+          <option value="850">850W</option>
+          <option value="1000">1000W+</option>
+        </select>
+      </div>
+      <div>
+        <label for="cooling">CPU cooler</label>
+        <select id="cooling">
+          <option value="stock" selected>Stock cooler</option>
+          <option value="air">Aftermarket air cooler</option>
+          <option value="aio">AIO liquid cooler</option>
+        </select>
+      </div>
+    </div>
+    <div class="rail-label"><span class="dot"></span><span>Usage</span></div>
+    <label for="usecase">What do you mainly use it for?</label>
+    <select id="usecase">
+      <option value="1080p">1080p gaming</option>
+      <option value="1440p" selected>1440p gaming</option>
+      <option value="4k">4K gaming</option>
+      <option value="streaming">Gaming + streaming/recording</option>
+      <option value="productivity">Everyday use / productivity</option>
+    </select>
+    <button class="analyze" onclick="analyzePC()">Analyze my PC</button>
+    <div id="loading"><div class="spinner"></div><span>Analyzing your setup…</span></div>
+    <div id="results"></div>
+  </main>
+  <div class="footer">
+    PCBuddy gives estimates based on typical performance and pricing data, not live benchmarks — treat results as a general guide.<br>
+    Some links on this page are affiliate links; purchases made through them may earn PCBuddy a small commission at no extra cost to you.<br>
+    Nothing you enter is sent anywhere or stored — all analysis runs in your browser.
+  </div>
+</div>
+<script>
+// ================= Error reporting =================
+window.onerror = function(msg, url, line, col, error) {
+  const results = document.getElementById("results");
+  const loading = document.getElementById("loading");
+  if (loading) loading.classList.remove("show");
+  if (results) {
+    results.style.display = "block";
+    results.innerHTML = "<pre style='color:#e2665a;background:#1a1415;padding:12px;border-left:3px solid #e2665a;white-space:pre-wrap;font-family:monospace;font-size:13px;'>JS Error: " + msg + "\nLine: " + line + "\n\n" + (error ? error.stack : "") + "</pre>";
+  }
+  return false;
+};
+
+// ================= Data =================
+
+const GPU_TIERS = {
+  "GTX 750": 0.7, "GTX 750 TI": 0.9, "GTX 760": 1.4, "GTX 760 TI": 1.5, "GTX 770": 1.9, "GTX 780": 2.4, "GTX 780 TI": 2.6, "GTX 950": 1.2, "GTX 960": 1.5, "GTX 970": 2.0, "GTX 980": 2.5, "GTX 980 TI": 3.0,
+  "GTX 1630": 1.1, "GTX 1650": 1.9, "GTX 1650 D6": 1.8, "GTX 1650 SUPER": 2.3, "GTX 1660": 2.8, "GTX 1660 SUPER": 3.0, "GTX 1660 TI": 3.1,
+  "RTX 2060": 3.3, "RTX 2060 SUPER": 3.6, "RTX 2070": 3.8, "RTX 2070 SUPER": 4.1, "RTX 2080": 4.4, "RTX 2080 TI": 5.1,
+  "RTX 3050": 3.1, "RTX 3050 6GB": 3.0, "RTX 3060": 3.8, "RTX 3060 12GB": 3.9, "RTX 3060 8GB": 3.7, "RTX 3060 TI": 4.3,
+  "RTX 3070": 4.8, "RTX 3070 8GB": 4.7, "RTX 3070 TI": 5.0, "RTX 3080": 5.8, "RTX 3080 10GB": 5.7, "RTX 3080 12GB": 5.9, "RTX 3080 TI": 6.2, "RTX 3090": 6.4, "RTX 3090 TI": 6.7,
+  "RTX 4060": 4.4, "RTX 4060 TI": 5.0, "RTX 4060 TI 16GB": 5.1, "RTX 4070": 5.8, "RTX 4070 SUPER": 6.2, "RTX 4070 TI": 6.8, "RTX 4070 TI SUPER": 7.2, "RTX 4080": 7.7, "RTX 4080 SUPER": 8.0, "RTX 4090": 9.8,
+  "RTX 5050": 3.4, "RTX 5060": 4.5, "RTX 5060 TI 16GB": 5.2, "RTX 5060 TI 8GB": 5.0, "RTX 5070": 6.5, "RTX 5070 TI": 8.0, "RTX 5080": 9.0, "RTX 5090": 11.8,
+  "RX 460": 1.5, "RX 470": 1.9, "RX 480": 2.1, "RX 550": 1.2, "RX 5500": 2.4, "RX 5500 XT": 2.6, "RX 560": 1.5, "RX 5600": 2.8, "RX 5600 XT": 3.0, "RX 570": 2.1, "RX 5700": 3.4, "RX 5700 XT": 3.6, "RX 580": 2.2, "RX 580 2048SP": 2.0, "RX 590": 2.4, "RX 6400": 2.0, "RX 6500 XT": 2.3, "RX 6600": 3.3, "RX 6600 XT": 3.6, "RX 6650 XT": 3.8, "RX 7600": 3.6, "RX 7600 XT": 3.9, "RX 7700 XT": 4.8, "RX 7800 XT": 5.6, "RX 7900 GRE": 6.2, "RX 7900 XT": 7.0, "RX 7900 XTX": 7.7, "RX 9060 XT": 4.5, "RX 9070": 6.8, "RX 9070 XT": 7.5,
+  "ARC A380": 2.2, "ARC A750": 3.2, "ARC A770": 3.7, "ARC B570": 3.3, "ARC B580": 3.9
+};
+
+const CPU_TIERS = {
+  "I3-2100": 0.9,
+  "I3-2120": 1.0,
+  "I3-2130": 1.05,
+  "I5-2500": 1.8,
+  "I5-2500K": 2.0,
+  "I5-2550K": 2.1,
+  "I5-3470": 2.2,
+  "I5-3470S": 2.1,
+  "I5-3570": 2.4,
+  "I5-3570K": 2.6,
+  "I5-3570S": 2.3,
+  "I5-3570T": 2.0,
+  "I5-3550": 2.1,
+  "I5-3450": 2.0,
+  "I7-2600": 2.8,
+  "I7-2600K": 3.0,
+  "I7-3770": 3.4,
+  "I7-3770K": 3.6,
+  "I7-3770S": 3.2,
+  "I7-3770T": 2.9,
+  "I3-4130": 1.4,
+  "I3-4150": 1.45,
+  "I3-4330": 1.5,
+  "I3-4350": 1.55,
+  "I3-4360": 1.6,
+  "I3-4370": 1.65,
+  "I5-4430": 2.1,
+  "I5-4440": 2.15,
+  "I5-4440S": 2.05,
+  "I5-4460": 2.2,
+  "I5-4460S": 2.1,
+  "I5-4570": 2.35,
+  "I5-4570S": 2.25,
+  "I5-4570T": 2.0,
+  "I5-4590": 2.45,
+  "I5-4590S": 2.35,
+  "I5-4590T": 2.2,
+  "I5-4690": 2.55,
+  "I5-4690K": 2.65,
+  "I5-4690S": 2.5,
+  "I5-4670": 2.25,
+  "I5-4670K": 2.45,
+  "I5-4670S": 2.15,
+  "I7-4770": 3.4,
+  "I7-4770K": 3.6,
+  "I7-4770S": 3.3,
+  "I7-4771": 3.35,
+  "I7-4790": 3.45,
+  "I7-4790K": 3.65,
+  "I7-4790S": 3.35,
+  "I7-4820K": 4.1,
+  "I7-4930K": 4.9,
+  "I7-4960X": 5.7,
+  "I3-4160": 1.6,
+  "I3-4170": 1.65,
+  "I7-5775C": 4.6,
+  "I7-5775R": 4.4,
+  "I3-6100": 1.8,
+  "I3-6300": 2.0,
+  "I3-6320": 2.2,
+  "I5-6400": 2.6,
+  "I5-6500": 2.8,
+  "I5-6600": 3.1,
+  "I5-6600K": 3.3,
+  "I7-6700": 3.9,
+  "I7-6700K": 4.1,
+  "I3-7100": 2.0,
+  "I3-7300": 2.2,
+  "I3-7350K": 2.5,
+  "I5-7400": 2.9,
+  "I5-7500": 3.1,
+  "I5-7600": 3.3,
+  "I5-7600K": 3.5,
+  "I7-7700": 4.2,
+  "I7-7700K": 4.4,
+  "I3-8100": 2.2,
+  "I3-8300": 2.3,
+  "I3-8350K": 2.9,
+  "I3-9100": 2.5,
+  "I3-9100F": 2.4,
+  "I3-9350K": 3.3,
+  "I3-9350KF": 3.2,
+  "I5-8400": 3.3,
+  "I5-8500": 3.5,
+  "I5-8600": 3.7,
+  "I5-8600K": 3.9,
+  "I5-9400": 3.6,
+  "I5-9400F": 3.5,
+  "I5-9500": 3.9,
+  "I5-9500F": 3.8,
+  "I5-9600": 4.1,
+  "I5-9600K": 4.3,
+  "I5-9600KF": 4.2,
+  "I7-8700": 4.9,
+  "I7-8700K": 5.2,
+  "I7-9700": 5.3,
+  "I7-9700F": 5.2,
+  "I7-9700K": 5.6,
+  "I7-9700KF": 5.5,
+  "I9-9900": 6.1,
+  "I9-9900K": 6.5,
+  "I9-9900KF": 6.4,
+  "I9-9900X": 6.8,
+  "I3-10100": 2.9,
+  "I3-10100F": 2.8,
+  "I3-10105": 3.1,
+  "I3-10105F": 3.0,
+  "I3-10300": 3.2,
+  "I3-10320": 3.6,
+  "I5-10400": 4.1,
+  "I5-10400F": 4.0,
+  "I5-10500": 4.3,
+  "I5-10600": 4.5,
+  "I5-10600K": 4.8,
+  "I5-10700": 5.7,
+  "I5-10700K": 6.0,
+  "I7-10700": 5.7,
+  "I7-10700K": 6.0,
+  "I9-10900": 6.7,
+  "I9-10900K": 7.1,
+  "I9-10900X": 7.5,
+  "I5-11400": 4.3,
+  "I5-11400F": 4.2,
+  "I5-11500": 4.5,
+  "I5-11600": 4.7,
+  "I5-11600K": 5.0,
+  "I7-11700": 5.3,
+  "I7-11700K": 5.6,
+  "I9-11900": 5.7,
+  "I9-11900K": 6.0,
+  "I3-12100": 3.5,
+  "I3-12100F": 3.4,
+  "I3-13100": 3.8,
+  "I3-13100F": 3.7,
+  "I3-14100": 4.1,
+  "I3-14100F": 4.0,
+  "I5-12400": 5.0,
+  "I5-12400F": 4.9,
+  "I5-12500": 5.2,
+  "I5-12600": 5.5,
+  "I5-12600K": 5.8,
+  "I5-13400": 5.3,
+  "I5-13400F": 5.2,
+  "I5-13500": 5.6,
+  "I5-13600": 5.8,
+  "I5-13600K": 6.1,
+  "I5-14400": 5.5,
+  "I5-14400F": 5.4,
+  "I5-14500": 5.7,
+  "I5-14600": 6.0,
+  "I5-14600K": 6.3,
+  "I7-12700": 6.4,
+  "I7-12700F": 6.3,
+  "I7-12700K": 6.7,
+  "I7-13700": 6.8,
+  "I7-13700F": 6.7,
+  "I7-13700K": 7.1,
+  "I7-14700": 7.1,
+  "I7-14700F": 7.0,
+  "I7-14700K": 7.4,
+  "I9-12900": 7.3,
+  "I9-12900F": 7.2,
+  "I9-12900K": 7.7,
+  "I9-13900": 7.8,
+  "I9-13900F": 7.7,
+  "I9-13900K": 8.2,
+  "I9-13900KS": 8.4,
+  "I9-14900": 8.0,
+  "I9-14900F": 7.9,
+  "I9-14900K": 8.4,
+  "I9-14900KS": 8.6,
+  "CORE ULTRA 5 125": 5.4,
+  "CORE ULTRA 5 125F": 5.3,
+  "CORE ULTRA 5 245": 6.4,
+  "CORE ULTRA 5 245F": 6.3,
+  "CORE ULTRA 5 245K": 6.5,
+  "CORE ULTRA 5 245KF": 6.4,
+  "CORE ULTRA 7 155": 5.7,
+  "CORE ULTRA 7 155F": 5.6,
+  "CORE ULTRA 7 265": 7.1,
+  "CORE ULTRA 7 265F": 7.0,
+  "CORE ULTRA 7 265K": 7.2,
+  "CORE ULTRA 7 265KF": 7.1,
+  "CORE ULTRA 9 185": 7.4,
+  "CORE ULTRA 9 185F": 7.3,
+  "CORE ULTRA 9 185K": 7.5,
+  "CORE ULTRA 9 185KF": 7.4,
+  "CORE ULTRA 9 285": 8.0,
+  "CORE ULTRA 9 285F": 7.9,
+  "CORE ULTRA 9 285K": 8.1,
+  "CORE ULTRA 9 285KF": 8.0
+};
+
+const CPU_SOCKETS = {
+  "I3-2100": "LGA1155",
+  "I3-2120": "LGA1155",
+  "I3-2130": "LGA1155",
+  "I5-2500": "LGA1155",
+  "I5-2500K": "LGA1155",
+  "I5-2550K": "LGA1155",
+  "I5-3470": "LGA1155",
+  "I5-3470S": "LGA1155",
+  "I5-3570": "LGA1155",
+  "I5-3570K": "LGA1155",
+  "I5-3570S": "LGA1155",
+  "I5-3570T": "LGA1155",
+  "I5-3550": "LGA1155",
+  "I5-3450": "LGA1155",
+  "I7-2600": "LGA1155",
+  "I7-2600K": "LGA1155",
+  "I7-3770": "LGA1155",
+  "I7-3770K": "LGA1155",
+  "I7-3770S": "LGA1155",
+  "I7-3770T": "LGA1155",
+  "I3-4130": "LGA1150",
+  "I3-4150": "LGA1150",
+  "I3-4330": "LGA1150",
+  "I3-4350": "LGA1150",
+  "I3-4360": "LGA1150",
+  "I3-4370": "LGA1150",
+  "I5-4430": "LGA1150",
+  "I5-4440": "LGA1150",
+  "I5-4440S": "LGA1150",
+  "I5-4460": "LGA1150",
+  "I5-4460S": "LGA1150",
+  "I5-4570": "LGA1150",
+  "I5-4570S": "LGA1150",
+  "I5-4570T": "LGA1150",
+  "I5-4590": "LGA1150",
+  "I5-4590S": "LGA1150",
+  "I5-4590T": "LGA1150",
+  "I5-4690": "LGA1150",
+  "I5-4690K": "LGA1150",
+  "I5-4690S": "LGA1150",
+  "I5-4670": "LGA1150",
+  "I5-4670K": "LGA1150",
+  "I5-4670S": "LGA1150",
+  "I7-4770": "LGA1150",
+  "I7-4770K": "LGA1150",
+  "I7-4770S": "LGA1150",
+  "I7-4771": "LGA1150",
+  "I7-4790": "LGA1150",
+  "I7-4790K": "LGA1150",
+  "I7-4790S": "LGA1150",
+  "I7-4820K": "LGA2011",
+  "I7-4930K": "LGA2011",
+  "I7-4960X": "LGA2011",
+  "I3-4160": "LGA1150",
+  "I3-4170": "LGA1150",
+  "I7-5775C": "LGA1150",
+  "I7-5775R": "LGA1150",
+  "I3-6100": "LGA1151",
+  "I3-6300": "LGA1151",
+  "I3-6320": "LGA1151",
+  "I5-6400": "LGA1151",
+  "I5-6500": "LGA1151",
+  "I5-6600": "LGA1151",
+  "I5-6600K": "LGA1151",
+  "I7-6700": "LGA1151",
+  "I7-6700K": "LGA1151",
+  "I3-7100": "LGA1151",
+  "I3-7300": "LGA1151",
+  "I3-7350K": "LGA1151",
+  "I5-7400": "LGA1151",
+  "I5-7500": "LGA1151",
+  "I5-7600": "LGA1151",
+  "I5-7600K": "LGA1151",
+  "I7-7700": "LGA1151",
+  "I7-7700K": "LGA1151",
+  "I3-8100": "LGA1151",
+  "I3-8300": "LGA1151",
+  "I3-8350K": "LGA1151",
+  "I3-9100": "LGA1151",
+  "I3-9100F": "LGA1151",
+  "I3-9350K": "LGA1151",
+  "I3-9350KF": "LGA1151",
+  "I5-8400": "LGA1151",
+  "I5-8500": "LGA1151",
+  "I5-8600": "LGA1151",
+  "I5-8600K": "LGA1151",
+  "I5-9400": "LGA1151",
+  "I5-9400F": "LGA1151",
+  "I5-9500": "LGA1151",
+  "I5-9500F": "LGA1151",
+  "I5-9600": "LGA1151",
+  "I5-9600K": "LGA1151",
+  "I5-9600KF": "LGA1151",
+  "I7-8700": "LGA1151",
+  "I7-8700K": "LGA1151",
+  "I7-9700": "LGA1151",
+  "I7-9700F": "LGA1151",
+  "I7-9700K": "LGA1151",
+  "I7-9700KF": "LGA1151",
+  "I9-9900": "LGA1151",
+  "I9-9900K": "LGA1151",
+  "I9-9900KF": "LGA1151",
+  "I9-9900X": "LGA2066",
+  "I3-10100": "LGA1200",
+  "I3-10100F": "LGA1200",
+  "I3-10105": "LGA1200",
+  "I3-10105F": "LGA1200",
+  "I3-10300": "LGA1200",
+  "I3-10320": "LGA1200",
+  "I5-10400": "LGA1200",
+  "I5-10400F": "LGA1200",
+  "I5-10500": "LGA1200",
+  "I5-10600": "LGA1200",
+  "I5-10600K": "LGA1200",
+  "I5-10700": "LGA1200",
+  "I5-10700K": "LGA1200",
+  "I7-10700": "LGA1200",
+  "I7-10700K": "LGA1200",
+  "I9-10900": "LGA1200",
+  "I9-10900K": "LGA1200",
+  "I9-10900X": "LGA2066",
+  "I5-11400": "LGA1200",
+  "I5-11400F": "LGA1200",
+  "I5-11500": "LGA1200",
+  "I5-11600": "LGA1200",
+  "I5-11600K": "LGA1200",
+  "I7-11700": "LGA1200",
+  "I7-11700K": "LGA1200",
+  "I9-11900": "LGA1200",
+  "I9-11900K": "LGA1200",
+  "I3-12100": "LGA1700",
+  "I3-12100F": "LGA1700",
+  "I3-13100": "LGA1700",
+  "I3-13100F": "LGA1700",
+  "I3-14100": "LGA1700",
+  "I3-14100F": "LGA1700",
+  "I5-12400": "LGA1700",
+  "I5-12400F": "LGA1700",
+  "I5-12500": "LGA1700",
+  "I5-12600": "LGA1700",
+  "I5-12600K": "LGA1700",
+  "I5-13400": "LGA1700",
+  "I5-13400F": "LGA1700",
+  "I5-13500": "LGA1700",
+  "I5-13600": "LGA1700",
+  "I5-13600K": "LGA1700",
+  "I5-14400": "LGA1700",
+  "I5-14400F": "LGA1700",
+  "I5-14500": "LGA1700",
+  "I5-14600": "LGA1700",
+  "I5-14600K": "LGA1700",
+  "I7-12700": "LGA1700",
+  "I7-12700F": "LGA1700",
+  "I7-12700K": "LGA1700",
+  "I7-13700": "LGA1700",
+  "I7-13700F": "LGA1700",
+  "I7-13700K": "LGA1700",
+  "I7-14700": "LGA1700",
+  "I7-14700F": "LGA1700",
+  "I7-14700K": "LGA1700",
+  "I9-12900": "LGA1700",
+  "I9-12900F": "LGA1700",
+  "I9-12900K": "LGA1700",
+  "I9-13900": "LGA1700",
+  "I9-13900F": "LGA1700",
+  "I9-13900K": "LGA1700",
+  "I9-13900KS": "LGA1700",
+  "I9-14900": "LGA1700",
+  "I9-14900F": "LGA1700",
+  "I9-14900K": "LGA1700",
+  "I9-14900KS": "LGA1700",
+  "CORE ULTRA 5 125": "LGA1851",
+  "CORE ULTRA 5 125F": "LGA1851",
+  "CORE ULTRA 5 245": "LGA1851",
+  "CORE ULTRA 5 245F": "LGA1851",
+  "CORE ULTRA 5 245K": "LGA1851",
+  "CORE ULTRA 5 245KF": "LGA1851",
+  "CORE ULTRA 7 155": "LGA1851",
+  "CORE ULTRA 7 155F": "LGA1851",
+  "CORE ULTRA 7 265": "LGA1851",
+  "CORE ULTRA 7 265F": "LGA1851",
+  "CORE ULTRA 7 265K": "LGA1851",
+  "CORE ULTRA 7 265KF": "LGA1851",
+  "CORE ULTRA 9 185": "LGA1851",
+  "CORE ULTRA 9 185F": "LGA1851",
+  "CORE ULTRA 9 185K": "LGA1851",
+  "CORE ULTRA 9 185KF": "LGA1851",
+  "CORE ULTRA 9 285": "LGA1851",
+  "CORE ULTRA 9 285F": "LGA1851",
+  "CORE ULTRA 9 285K": "LGA1851",
+  "CORE ULTRA 9 285KF": "LGA1851"
+};
+
+const SOCKET_LABELS = {
+  "LGA1155": "Intel LGA1155",
+  "LGA1150": "Intel LGA1150",
+  "LGA1151": "Intel LGA1151",
+  "LGA1200": "Intel LGA1200",
+  "LGA1700": "Intel LGA1700",
+  "LGA1851": "Intel LGA1851",
+  "LGA2066": "Intel LGA2066",
+  "AM5": "AMD AM5",
+  "AM4": "AMD AM4"
+};
+
+const CPU_LIST = [
+  "Intel Core CORE ULTRA 5 125",
+  "Intel Core CORE ULTRA 5 125F",
+  "Intel Core CORE ULTRA 5 245",
+  "Intel Core CORE ULTRA 5 245F",
+  "Intel Core CORE ULTRA 5 245K",
+  "Intel Core CORE ULTRA 5 245KF",
+  "Intel Core CORE ULTRA 7 155",
+  "Intel Core CORE ULTRA 7 155F",
+  "Intel Core CORE ULTRA 7 265",
+  "Intel Core CORE ULTRA 7 265F",
+  "Intel Core CORE ULTRA 7 265K",
+  "Intel Core CORE ULTRA 7 265KF",
+  "Intel Core CORE ULTRA 9 185",
+  "Intel Core CORE ULTRA 9 185F",
+  "Intel Core CORE ULTRA 9 185K",
+  "Intel Core CORE ULTRA 9 185KF",
+  "Intel Core CORE ULTRA 9 285",
+  "Intel Core CORE ULTRA 9 285F",
+  "Intel Core CORE ULTRA 9 285K",
+  "Intel Core CORE ULTRA 9 285KF",
+  "Intel Core i3-10100",
+  "Intel Core i3-10100F",
+  "Intel Core i3-10105",
+  "Intel Core i3-10105F",
+  "Intel Core i3-10300",
+  "Intel Core i3-10320",
+  "Intel Core i3-12100",
+  "Intel Core i3-12100F",
+  "Intel Core i3-13100",
+  "Intel Core i3-13100F",
+  "Intel Core i3-14100",
+  "Intel Core i3-14100F",
+  "Intel Core i3-2100",
+  "Intel Core i3-2120",
+  "Intel Core i3-2130",
+  "Intel Core i3-4130",
+  "Intel Core i3-4150",
+  "Intel Core i3-4160",
+  "Intel Core i3-4170",
+  "Intel Core i3-4330",
+  "Intel Core i3-4350",
+  "Intel Core i3-4360",
+  "Intel Core i3-4370",
+  "Intel Core i3-6100",
+  "Intel Core i3-6300",
+  "Intel Core i3-6320",
+  "Intel Core i3-7100",
+  "Intel Core i3-7300",
+  "Intel Core i3-7350K",
+  "Intel Core i3-8100",
+  "Intel Core i3-8300",
+  "Intel Core i3-8350K",
+  "Intel Core i3-9100",
+  "Intel Core i3-9100F",
+  "Intel Core i3-9350K",
+  "Intel Core i3-9350KF",
+  "Intel Core i5-10400",
+  "Intel Core i5-10400F",
+  "Intel Core i5-10500",
+  "Intel Core i5-10600",
+  "Intel Core i5-10600K",
+  "Intel Core i5-10700",
+  "Intel Core i5-10700K",
+  "Intel Core i5-11400",
+  "Intel Core i5-11400F",
+  "Intel Core i5-11500",
+  "Intel Core i5-11600",
+  "Intel Core i5-11600K",
+  "Intel Core i5-12400",
+  "Intel Core i5-12400F",
+  "Intel Core i5-12500",
+  "Intel Core i5-12600",
+  "Intel Core i5-12600K",
+  "Intel Core i5-13400",
+  "Intel Core i5-13400F",
+  "Intel Core i5-13500",
+  "Intel Core i5-13600",
+  "Intel Core i5-13600K",
+  "Intel Core i5-14400",
+  "Intel Core i5-14400F",
+  "Intel Core i5-14500",
+  "Intel Core i5-14600",
+  "Intel Core i5-14600K",
+  "Intel Core i5-2500",
+  "Intel Core i5-2500K",
+  "Intel Core i5-2550K",
+  "Intel Core i5-3450",
+  "Intel Core i5-3470",
+  "Intel Core i5-3470S",
+  "Intel Core i5-3550",
+  "Intel Core i5-3570",
+  "Intel Core i5-3570K",
+  "Intel Core i5-3570S",
+  "Intel Core i5-3570T",
+  "Intel Core i5-4430",
+  "Intel Core i5-4440",
+  "Intel Core i5-4440S",
+  "Intel Core i5-4460",
+  "Intel Core i5-4460S",
+  "Intel Core i5-4570",
+  "Intel Core i5-4570S",
+  "Intel Core i5-4570T",
+  "Intel Core i5-4590",
+  "Intel Core i5-4590S",
+  "Intel Core i5-4590T",
+  "Intel Core i5-4670",
+  "Intel Core i5-4670K",
+  "Intel Core i5-4670S",
+  "Intel Core i5-4690",
+  "Intel Core i5-4690K",
+  "Intel Core i5-4690S",
+  "Intel Core i5-6400",
+  "Intel Core i5-6500",
+  "Intel Core i5-6600",
+  "Intel Core i5-6600K",
+  "Intel Core i5-7400",
+  "Intel Core i5-7500",
+  "Intel Core i5-7600",
+  "Intel Core i5-7600K",
+  "Intel Core i5-8400",
+  "Intel Core i5-8500",
+  "Intel Core i5-8600",
+  "Intel Core i5-8600K",
+  "Intel Core i5-9400",
+  "Intel Core i5-9400F",
+  "Intel Core i5-9500",
+  "Intel Core i5-9500F",
+  "Intel Core i5-9600",
+  "Intel Core i5-9600K",
+  "Intel Core i5-9600KF",
+  "Intel Core i7-10700",
+  "Intel Core i7-10700K",
+  "Intel Core i7-11700",
+  "Intel Core i7-11700K",
+  "Intel Core i7-12700",
+  "Intel Core i7-12700F",
+  "Intel Core i7-12700K",
+  "Intel Core i7-13700",
+  "Intel Core i7-13700F",
+  "Intel Core i7-13700K",
+  "Intel Core i7-14700",
+  "Intel Core i7-14700F",
+  "Intel Core i7-14700K",
+  "Intel Core i7-2600",
+  "Intel Core i7-2600K",
+  "Intel Core i7-3770",
+  "Intel Core i7-3770K",
+  "Intel Core i7-3770S",
+  "Intel Core i7-3770T",
+  "Intel Core i7-4770",
+  "Intel Core i7-4770K",
+  "Intel Core i7-4770S",
+  "Intel Core i7-4771",
+  "Intel Core i7-4790",
+  "Intel Core i7-4790K",
+  "Intel Core i7-4790S",
+  "Intel Core i7-4820K",
+  "Intel Core i7-4930K",
+  "Intel Core i7-4960X",
+  "Intel Core i7-5775C",
+  "Intel Core i7-5775R",
+  "Intel Core i7-6700",
+  "Intel Core i7-6700K",
+  "Intel Core i7-7700",
+  "Intel Core i7-7700K",
+  "Intel Core i7-8700",
+  "Intel Core i7-8700K",
+  "Intel Core i7-9700",
+  "Intel Core i7-9700F",
+  "Intel Core i7-9700K",
+  "Intel Core i7-9700KF",
+  "Intel Core i9-10900",
+  "Intel Core i9-10900K",
+  "Intel Core i9-10900X",
+  "Intel Core i9-11900",
+  "Intel Core i9-11900K",
+  "Intel Core i9-12900",
+  "Intel Core i9-12900F",
+  "Intel Core i9-12900K",
+  "Intel Core i9-13900",
+  "Intel Core i9-13900F",
+  "Intel Core i9-13900K",
+  "Intel Core i9-13900KS",
+  "Intel Core i9-14900",
+  "Intel Core i9-14900F",
+  "Intel Core i9-14900K",
+  "Intel Core i9-14900KS",
+  "Intel Core i9-9900",
+  "Intel Core i9-9900K",
+  "Intel Core i9-9900KF",
+  "Intel Core i9-9900X"
+];
+
+const GPU_LIST = [
+  "ARC A380",
+  "ARC A750",
+  "ARC A770",
+  "ARC B570",
+  "ARC B580",
+  "GTX 1050",
+  "GTX 1050 TI",
+  "GTX 1060",
+  "GTX 1060 3GB",
+  "GTX 1060 6GB",
+  "GTX 1070",
+  "GTX 1070 TI",
+  "GTX 1080",
+  "GTX 1080 TI",
+  "GTX 1630",
+  "GTX 1650",
+  "GTX 1650 D6",
+  "GTX 1650 SUPER",
+  "GTX 1660",
+  "GTX 1660 SUPER",
+  "GTX 1660 TI",
+  "GTX 750",
+  "GTX 750 TI",
+  "GTX 760",
+  "GTX 760 TI",
+  "GTX 770",
+  "GTX 780",
+  "GTX 780 TI",
+  "GTX 950",
+  "GTX 960",
+  "GTX 970",
+  "GTX 980",
+  "GTX 980 TI",
+  "RTX 2060",
+  "RTX 2060 SUPER",
+  "RTX 2070",
+  "RTX 2070 SUPER",
+  "RTX 2080",
+  "RTX 2080 TI",
+  "RTX 3050",
+  "RTX 3050 6GB",
+  "RTX 3060",
+  "RTX 3060 12GB",
+  "RTX 3060 8GB",
+  "RTX 3060 TI",
+  "RTX 3070",
+  "RTX 3070 8GB",
+  "RTX 3070 TI",
+  "RTX 3080",
+  "RTX 3080 10GB",
+  "RTX 3080 12GB",
+  "RTX 3080 TI",
+  "RTX 3090",
+  "RTX 3090 TI",
+  "RTX 4060",
+  "RTX 4060 TI",
+  "RTX 4060 TI 16GB",
+  "RTX 4070",
+  "RTX 4070 SUPER",
+  "RTX 4070 TI",
+  "RTX 4070 TI SUPER",
+  "RTX 4080",
+  "RTX 4080 SUPER",
+  "RTX 4090",
+  "RTX 5050",
+  "RTX 5060",
+  "RTX 5060 TI 16GB",
+  "RTX 5060 TI 8GB",
+  "RTX 5070",
+  "RTX 5070 TI",
+  "RTX 5080",
+  "RTX 5090",
+  "RX 460",
+  "RX 470",
+  "RX 480",
+  "RX 550",
+  "RX 5500",
+  "RX 5500 XT",
+  "RX 560",
+  "RX 5600",
+  "RX 5600 XT",
+  "RX 570",
+  "RX 5700",
+  "RX 5700 XT",
+  "RX 580",
+  "RX 580 2048SP",
+  "RX 590",
+  "RX 6400",
+  "RX 6500 XT",
+  "RX 6600",
+  "RX 6600 XT",
+  "RX 6650 XT",
+  "RX 7600",
+  "RX 7600 XT",
+  "RX 7700 XT",
+  "RX 7800 XT",
+  "RX 7900 GRE",
+  "RX 7900 XT",
+  "RX 7900 XTX",
+  "RX 9060 XT",
+  "RX 9070",
+  "RX 9070 XT"
+];
+
+const MOBO_DB = {
+  "ASRock Z75 Pro3": {
+    "socket": "LGA1155",
+    "price": 75
+  },
+  "MSI H77MA-G45": {
+    "socket": "LGA1155",
+    "price": 80
+  },
+  "ASUS P8Z77-V": {
+    "socket": "LGA1155",
+    "price": 140
+  },
+  "GIGABYTE GA-Z77X-UD3H": {
+    "socket": "LGA1155",
+    "price": 120
+  },
+  "ASUS H97M-E": {
+    "socket": "LGA1150",
+    "price": 65
+  },
+  "ASUS H97M-PLUS": {
+    "socket": "LGA1150",
+    "price": 70
+  },
+  "MSI H97 PC-MATE": {
+    "socket": "LGA1150",
+    "price": 72
+  },
+  "GIGABYTE GA-H97-D3H": {
+    "socket": "LGA1150",
+    "price": 78
+  },
+  "ASRock H97M Pro4": {
+    "socket": "LGA1150",
+    "price": 65
+  },
+  "ASUS B85M-G": {
+    "socket": "LGA1150",
+    "price": 60
+  },
+  "ASUS B85-PRO": {
+    "socket": "LGA1150",
+    "price": 70
+  },
+  "MSI B85-G41 PC Mate": {
+    "socket": "LGA1150",
+    "price": 62
+  },
+  "GIGABYTE GA-B85M-DS3H-A": {
+    "socket": "LGA1150",
+    "price": 58
+  },
+  "ASRock B85M Pro4": {
+    "socket": "LGA1150",
+    "price": 60
+  },
+  "ASUS Z97-A": {
+    "socket": "LGA1150",
+    "price": 130
+  },
+  "ASUS Z97-P": {
+    "socket": "LGA1150",
+    "price": 110
+  },
+  "ASUS Z97M-PLUS": {
+    "socket": "LGA1150",
+    "price": 115
+  },
+  "MSI Z97-G55": {
+    "socket": "LGA1150",
+    "price": 120
+  },
+  "MSI Z97S SLI Plus": {
+    "socket": "LGA1150",
+    "price": 125
+  },
+  "GIGABYTE GA-Z97X-Gaming 5": {
+    "socket": "LGA1150",
+    "price": 140
+  },
+  "ASRock Z97 Extreme4": {
+    "socket": "LGA1150",
+    "price": 115
+  },
+  "ASRock Z97 Killer": {
+    "socket": "LGA1150",
+    "price": 118
+  },
+  "MSI H110M PRO-VD": {
+    "socket": "LGA1151",
+    "price": 45
+  },
+  "ASUS H110M-A": {
+    "socket": "LGA1151",
+    "price": 48
+  },
+  "GIGABYTE GA-H110M-A": {
+    "socket": "LGA1151",
+    "price": 46
+  },
+  "ASRock H110M-HDS": {
+    "socket": "LGA1151",
+    "price": 42
+  },
+  "MSI B150M PRO-VDH": {
+    "socket": "LGA1151",
+    "price": 65
+  },
+  "ASUS B150M-A": {
+    "socket": "LGA1151",
+    "price": 68
+  },
+  "GIGABYTE GA-B150M-DS3H": {
+    "socket": "LGA1151",
+    "price": 70
+  },
+  "ASRock B150M Pro4": {
+    "socket": "LGA1151",
+    "price": 62
+  },
+  "ASUS B150 PRO GAMING": {
+    "socket": "LGA1151",
+    "price": 85
+  },
+  "MSI B150 Krait Gaming": {
+    "socket": "LGA1151",
+    "price": 90
+  },
+  "ASRock B150 Gaming K4": {
+    "socket": "LGA1151",
+    "price": 88
+  },
+  "MSI Z170A PC Mate": {
+    "socket": "LGA1151",
+    "price": 95
+  },
+  "ASUS Z170-A": {
+    "socket": "LGA1151",
+    "price": 120
+  },
+  "ASUS Z170-E": {
+    "socket": "LGA1151",
+    "price": 105
+  },
+  "GIGABYTE GA-Z170X-Gaming 5": {
+    "socket": "LGA1151",
+    "price": 140
+  },
+  "MSI Z170A GAMING M5": {
+    "socket": "LGA1151",
+    "price": 150
+  },
+  "ASRock Z170 Extreme6": {
+    "socket": "LGA1151",
+    "price": 160
+  },
+  "ASUS PRIME B360-PLUS": {
+    "socket": "LGA1151",
+    "price": 85
+  },
+  "MSI B360-A PRO": {
+    "socket": "LGA1151",
+    "price": 78
+  },
+  "GIGABYTE B360M DS3H": {
+    "socket": "LGA1151",
+    "price": 70
+  },
+  "ASRock B360M Pro4": {
+    "socket": "LGA1151",
+    "price": 72
+  },
+  "ASUS PRIME B365-PLUS": {
+    "socket": "LGA1151",
+    "price": 82
+  },
+  "ASRock B365M Pro4": {
+    "socket": "LGA1151",
+    "price": 75
+  },
+  "MSI Z390-A PRO": {
+    "socket": "LGA1151",
+    "price": 130
+  },
+  "ASUS PRIME Z390-P": {
+    "socket": "LGA1151",
+    "price": 120
+  },
+  "ASUS ROG STRIX Z390-E GAMING": {
+    "socket": "LGA1151",
+    "price": 220
+  },
+  "MSI MAG Z390 TOMAHAWK": {
+    "socket": "LGA1151",
+    "price": 180
+  },
+  "GIGABYTE Z390 AORUS PRO": {
+    "socket": "LGA1151",
+    "price": 190
+  },
+  "ASRock Z390 Taichi": {
+    "socket": "LGA1151",
+    "price": 250
+  },
+  "ASUS PRIME H410M-A": {
+    "socket": "LGA1200",
+    "price": 55
+  },
+  "MSI H410M PRO-VH": {
+    "socket": "LGA1200",
+    "price": 50
+  },
+  "GIGABYTE H410M H": {
+    "socket": "LGA1200",
+    "price": 48
+  },
+  "ASRock H410M-HDV": {
+    "socket": "LGA1200",
+    "price": 46
+  },
+  "ASUS PRIME H510M-A": {
+    "socket": "LGA1200",
+    "price": 65
+  },
+  "MSI H510M-A": {
+    "socket": "LGA1200",
+    "price": 58
+  },
+  "GIGABYTE H510M H": {
+    "socket": "LGA1200",
+    "price": 55
+  },
+  "ASUS PRIME B460-PLUS": {
+    "socket": "LGA1200",
+    "price": 95
+  },
+  "MSI B460M PRO-VDH WIFI": {
+    "socket": "LGA1200",
+    "price": 88
+  },
+  "GIGABYTE B460M DS3H AX": {
+    "socket": "LGA1200",
+    "price": 92
+  },
+  "ASRock B460M Pro4": {
+    "socket": "LGA1200",
+    "price": 82
+  },
+  "ASUS TUF GAMING B460-PLUS WIFI": {
+    "socket": "LGA1200",
+    "price": 130
+  },
+  "MSI MAG B460 TOMAHAWK": {
+    "socket": "LGA1200",
+    "price": 140
+  },
+  "ASRock B560M Pro4": {
+    "socket": "LGA1200",
+    "price": 85
+  },
+  "ASUS PRIME B560M-A": {
+    "socket": "LGA1200",
+    "price": 90
+  },
+  "MSI B560M PRO-VDH WIFI": {
+    "socket": "LGA1200",
+    "price": 95
+  },
+  "GIGABYTE B560M AORUS ELITE": {
+    "socket": "LGA1200",
+    "price": 100
+  },
+  "ASUS TUF GAMING B560M-PLUS WIFI": {
+    "socket": "LGA1200",
+    "price": 135
+  },
+  "MSI MAG B560M MORTAR WIFI": {
+    "socket": "LGA1200",
+    "price": 150
+  },
+  "GIGABYTE B560I AORUS PRO AX": {
+    "socket": "LGA1200",
+    "price": 165
+  },
+  "ASUS ROG STRIX B560-F GAMING WIFI": {
+    "socket": "LGA1200",
+    "price": 180
+  },
+  "ASRock B560 Steel Legend": {
+    "socket": "LGA1200",
+    "price": 110
+  },
+  "ASUS PRIME Z590-A": {
+    "socket": "LGA1200",
+    "price": 190
+  },
+  "MSI MAG Z590 TOMAHAWK WIFI": {
+    "socket": "LGA1200",
+    "price": 200
+  },
+  "ASUS ROG STRIX Z590-E GAMING WIFI": {
+    "socket": "LGA1200",
+    "price": 320
+  },
+  "GIGABYTE Z590 VISION G": {
+    "socket": "LGA1200",
+    "price": 210
+  },
+  "ASRock Z590 Taichi": {
+    "socket": "LGA1200",
+    "price": 350
+  },
+  "ASUS PRIME H610M-E": {
+    "socket": "LGA1700",
+    "price": 65
+  },
+  "MSI H610M-G": {
+    "socket": "LGA1700",
+    "price": 55
+  },
+  "GIGABYTE H610M H DDR4": {
+    "socket": "LGA1700",
+    "price": 58
+  },
+  "ASRock H610M-HDV/M.2": {
+    "socket": "LGA1700",
+    "price": 60
+  },
+  "ASUS PRIME B660M-A": {
+    "socket": "LGA1700",
+    "price": 95
+  },
+  "MSI PRO B660M-A": {
+    "socket": "LGA1700",
+    "price": 88
+  },
+  "GIGABYTE B660M DS3H AX DDR4": {
+    "socket": "LGA1700",
+    "price": 92
+  },
+  "ASRock B660M Pro RS": {
+    "socket": "LGA1700",
+    "price": 85
+  },
+  "ASUS TUF GAMING B660M-PLUS WIFI": {
+    "socket": "LGA1700",
+    "price": 150
+  },
+  "MSI MAG B660M MORTAR WIFI": {
+    "socket": "LGA1700",
+    "price": 160
+  },
+  "GIGABYTE B660M AORUS Pro AX": {
+    "socket": "LGA1700",
+    "price": 145
+  },
+  "ASRock B660M Steel Legend": {
+    "socket": "LGA1700",
+    "price": 115
+  },
+  "ASUS ROG STRIX B660-F GAMING WIFI": {
+    "socket": "LGA1700",
+    "price": 210
+  },
+  "MSI MPG B660I GAMING EDGE WIFI": {
+    "socket": "LGA1700",
+    "price": 170
+  },
+  "ASUS PRIME B760-PLUS": {
+    "socket": "LGA1700",
+    "price": 130
+  },
+  "ASUS PRIME B760-PLUS D4": {
+    "socket": "LGA1700",
+    "price": 125
+  },
+  "ASUS TUF GAMING B760M-PLUS WIFI": {
+    "socket": "LGA1700",
+    "price": 135
+  },
+  "MSI PRO B760M-A WIFI": {
+    "socket": "LGA1700",
+    "price": 110
+  },
+  "GIGABYTE B760M AORUS ELITE AX": {
+    "socket": "LGA1700",
+    "price": 115
+  },
+  "ASRock B760M Pro RS": {
+    "socket": "LGA1700",
+    "price": 95
+  },
+  "ASUS TUF GAMING B760-PLUS WIFI": {
+    "socket": "LGA1700",
+    "price": 150
+  },
+  "MSI MAG B760 TOMAHAWK WIFI": {
+    "socket": "LGA1700",
+    "price": 190
+  },
+  "GIGABYTE B760 GAMING X AX": {
+    "socket": "LGA1700",
+    "price": 130
+  },
+  "ASRock B760 Steel Legend": {
+    "socket": "LGA1700",
+    "price": 125
+  },
+  "ASUS ROG STRIX B760-F GAMING WIFI": {
+    "socket": "LGA1700",
+    "price": 230
+  },
+  "MSI MPG B760I GAMING EDGE WIFI": {
+    "socket": "LGA1700",
+    "price": 175
+  },
+  "ASUS PRIME Z690-A": {
+    "socket": "LGA1700",
+    "price": 170
+  },
+  "ASUS ROG STRIX Z690-A GAMING WIFI": {
+    "socket": "LGA1700",
+    "price": 260
+  },
+  "MSI MEG Z690 ACE": {
+    "socket": "LGA1700",
+    "price": 380
+  },
+  "GIGABYTE Z690 AORUS MASTER": {
+    "socket": "LGA1700",
+    "price": 340
+  },
+  "ASRock Z690 Taichi": {
+    "socket": "LGA1700",
+    "price": 400
+  },
+  "ASRock Z790 Pro RS": {
+    "socket": "LGA1700",
+    "price": 190
+  },
+  "ASUS TUF GAMING Z790-PLUS WIFI": {
+    "socket": "LGA1700",
+    "price": 240
+  },
+  "MSI MAG Z790 TOMAHAWK WIFI": {
+    "socket": "LGA1700",
+    "price": 220
+  },
+  "GIGABYTE Z790 AORUS ELITE AX": {
+    "socket": "LGA1700",
+    "price": 240
+  },
+  "ASUS ROG STRIX Z790-E GAMING WIFI": {
+    "socket": "LGA1700",
+    "price": 380
+  },
+  "ASUS ROG MAXIMUS Z790 HERO": {
+    "socket": "LGA1700",
+    "price": 550
+  },
+  "MSI MEG Z790 ACE": {
+    "socket": "LGA1700",
+    "price": 500
+  },
+  "GIGABYTE Z790 AORUS MASTER": {
+    "socket": "LGA1700",
+    "price": 450
+  },
+  "ASRock Z790 Taichi": {
+    "socket": "LGA1700",
+    "price": 420
+  },
+  "ASUS ROG STRIX Z790-I GAMING WIFI": {
+    "socket": "LGA1700",
+    "price": 350
+  },
+  "MSI MPG Z790I EDGE WIFI": {
+    "socket": "LGA1700",
+    "price": 280
+  },
+  "ASRock B860M Pro RS": {
+    "socket": "LGA1851",
+    "price": 140
+  },
+  "ASUS TUF GAMING B860-PLUS WIFI": {
+    "socket": "LGA1851",
+    "price": 175
+  },
+  "MSI PRO B860M-A WIFI": {
+    "socket": "LGA1851",
+    "price": 160
+  },
+  "GIGABYTE B860M GAMING X AX": {
+    "socket": "LGA1851",
+    "price": 155
+  },
+  "ASRock B860 Steel Legend": {
+    "socket": "LGA1851",
+    "price": 165
+  },
+  "ASUS TUF GAMING Z890-PLUS WIFI": {
+    "socket": "LGA1851",
+    "price": 270
+  },
+  "MSI MAG Z890 TOMAHAWK WIFI": {
+    "socket": "LGA1851",
+    "price": 320
+  },
+  "GIGABYTE Z890 AORUS ELITE WIFI7": {
+    "socket": "LGA1851",
+    "price": 300
+  },
+  "ASUS ROG STRIX Z890-E GAMING WIFI": {
+    "socket": "LGA1851",
+    "price": 480
+  },
+  "ASRock Z890 Taichi": {
+    "socket": "LGA1851",
+    "price": 520
+  },
+  "ASUS ROG MAXIMUS Z890 HERO": {
+    "socket": "LGA1851",
+    "price": 600
+  },
+  "ASRock A320M-HDV": {
+    "socket": "AM4",
+    "price": 45
+  },
+  "GIGABYTE A320M-S2H": {
+    "socket": "AM4",
+    "price": 48
+  },
+  "MSI A320M-A": {
+    "socket": "AM4",
+    "price": 46
+  },
+  "ASUS PRIME A320M-K": {
+    "socket": "AM4",
+    "price": 50
+  },
+  "ASRock A520M-HDV": {
+    "socket": "AM4",
+    "price": 55
+  },
+  "GIGABYTE A520M S2H": {
+    "socket": "AM4",
+    "price": 58
+  },
+  "MSI A520M-A": {
+    "socket": "AM4",
+    "price": 52
+  },
+  "ASUS PRIME A520M-K": {
+    "socket": "AM4",
+    "price": 60
+  },
+  "ASRock A520M Pro4": {
+    "socket": "AM4",
+    "price": 70
+  },
+  "ASRock B450M Pro4": {
+    "socket": "AM4",
+    "price": 70
+  },
+  "MSI B450M PRO-VDH MAX": {
+    "socket": "AM4",
+    "price": 75
+  },
+  "GIGABYTE B450M DS3H": {
+    "socket": "AM4",
+    "price": 68
+  },
+  "ASUS PRIME B450M-A": {
+    "socket": "AM4",
+    "price": 78
+  },
+  "ASRock B450M Steel Legend": {
+    "socket": "AM4",
+    "price": 85
+  },
+  "MSI B450 TOMAHAWK MAX": {
+    "socket": "AM4",
+    "price": 100
+  },
+  "MSI B450-A PRO MAX": {
+    "socket": "AM4",
+    "price": 90
+  },
+  "ASUS TUF GAMING B450-PLUS": {
+    "socket": "AM4",
+    "price": 110
+  },
+  "GIGABYTE B450 AORUS M": {
+    "socket": "AM4",
+    "price": 88
+  },
+  "ASRock Fatal1ty B450 Gaming-ITX/ac": {
+    "socket": "AM4",
+    "price": 130
+  },
+  "ASUS ROG STRIX B450-F GAMING": {
+    "socket": "AM4",
+    "price": 140
+  },
+  "MSI MPG B450 GAMING PLUS": {
+    "socket": "AM4",
+    "price": 105
+  },
+  "GIGABYTE B450 AORUS ELITE": {
+    "socket": "AM4",
+    "price": 100
+  },
+  "ASUS PRIME B550-PLUS": {
+    "socket": "AM4",
+    "price": 110
+  },
+  "ASUS TUF GAMING B550-PLUS": {
+    "socket": "AM4",
+    "price": 140
+  },
+  "MSI MAG B550 TOMAHAWK": {
+    "socket": "AM4",
+    "price": 150
+  },
+  "GIGABYTE B550 AORUS ELITE AX": {
+    "socket": "AM4",
+    "price": 140
+  },
+  "ASRock B550 Pro4": {
+    "socket": "AM4",
+    "price": 95
+  },
+  "ASRock B550M Steel Legend": {
+    "socket": "AM4",
+    "price": 105
+  },
+  "ASUS ROG STRIX B550-F GAMING": {
+    "socket": "AM4",
+    "price": 180
+  },
+  "MSI MPG B550 GAMING PLUS": {
+    "socket": "AM4",
+    "price": 130
+  },
+  "GIGABYTE B550M AORUS PRO-P": {
+    "socket": "AM4",
+    "price": 120
+  },
+  "ASRock B550M-ITX/ac": {
+    "socket": "AM4",
+    "price": 130
+  },
+  "ASRock X570 Phantom Gaming 4": {
+    "socket": "AM4",
+    "price": 170
+  },
+  "ASUS PRIME X570-P": {
+    "socket": "AM4",
+    "price": 185
+  },
+  "MSI MPG X570 GAMING PLUS": {
+    "socket": "AM4",
+    "price": 195
+  },
+  "GIGABYTE X570 AORUS ELITE": {
+    "socket": "AM4",
+    "price": 200
+  },
+  "ASUS TUF GAMING X570-PLUS": {
+    "socket": "AM4",
+    "price": 215
+  },
+  "ASRock X570 Steel Legend": {
+    "socket": "AM4",
+    "price": 205
+  },
+  "ASUS ROG STRIX X570-E GAMING": {
+    "socket": "AM4",
+    "price": 270
+  },
+  "GIGABYTE X570 AORUS ULTRA": {
+    "socket": "AM4",
+    "price": 260
+  },
+  "MSI MEG X570 UNIFY": {
+    "socket": "AM4",
+    "price": 320
+  },
+  "ASRock X570 Taichi": {
+    "socket": "AM4",
+    "price": 330
+  },
+  "ASUS ROG CROSSHAIR VIII HERO": {
+    "socket": "AM4",
+    "price": 420
+  },
+  "ASUS ROG CROSSHAIR VIII FORMULA": {
+    "socket": "AM4",
+    "price": 500
+  },
+  "ASRock A620M-HDV/M.2": {
+    "socket": "AM5",
+    "price": 80
+  },
+  "GIGABYTE A620M S2H": {
+    "socket": "AM5",
+    "price": 85
+  },
+  "MSI A620M-A": {
+    "socket": "AM5",
+    "price": 82
+  },
+  "ASUS PRIME A620M-A": {
+    "socket": "AM5",
+    "price": 88
+  },
+  "ASRock A620M Pro RS": {
+    "socket": "AM5",
+    "price": 90
+  },
+  "ASRock B650M Pro RS": {
+    "socket": "AM5",
+    "price": 110
+  },
+  "ASUS PRIME B650M-A": {
+    "socket": "AM5",
+    "price": 125
+  },
+  "MSI PRO B650M-A WIFI": {
+    "socket": "AM5",
+    "price": 130
+  },
+  "GIGABYTE B650M GAMING X AX": {
+    "socket": "AM5",
+    "price": 135
+  },
+  "ASRock B650M Steel Legend": {
+    "socket": "AM5",
+    "price": 125
+  },
+  "ASUS TUF GAMING B650M-PLUS WIFI": {
+    "socket": "AM5",
+    "price": 160
+  },
+  "MSI MAG B650M MORTAR WIFI": {
+    "socket": "AM5",
+    "price": 170
+  },
+  "GIGABYTE B650M AORUS ELITE AX": {
+    "socket": "AM5",
+    "price": 145
+  },
+  "ASRock B650E Steel Legend": {
+    "socket": "AM5",
+    "price": 160
+  },
+  "ASUS ROG STRIX B650E-F GAMING WIFI": {
+    "socket": "AM5",
+    "price": 260
+  },
+  "MSI MPG B650I EDGE WIFI": {
+    "socket": "AM5",
+    "price": 210
+  },
+  "ASRock B650E-C Phantom Gaming 4": {
+    "socket": "AM5",
+    "price": 175
+  },
+  "ASUS PRIME B650-PLUS": {
+    "socket": "AM5",
+    "price": 155
+  },
+  "MSI PRO B650-P WIFI": {
+    "socket": "AM5",
+    "price": 140
+  },
+  "GIGABYTE B650 GAMING X AX": {
+    "socket": "AM5",
+    "price": 160
+  },
+  "ASUS TUF GAMING B650-PLUS WIFI": {
+    "socket": "AM5",
+    "price": 170
+  },
+  "ASRock B650M Pro4": {
+    "socket": "AM5",
+    "price": 105
+  },
+  "ASUS ROG STRIX B650-A GAMING WIFI": {
+    "socket": "AM5",
+    "price": 240
+  },
+  "GIGABYTE B650E AORUS MASTER": {
+    "socket": "AM5",
+    "price": 320
+  },
+  "MSI MAG B650 TOMAHAWK WIFI": {
+    "socket": "AM5",
+    "price": 220
+  },
+  "ASUS PRIME X670-P": {
+    "socket": "AM5",
+    "price": 220
+  },
+  "ASUS TUF GAMING X670E-PLUS WIFI": {
+    "socket": "AM5",
+    "price": 310
+  },
+  "MSI MAG X670E TOMAHAWK WIFI": {
+    "socket": "AM5",
+    "price": 330
+  },
+  "GIGABYTE X670 AORUS ELITE AX": {
+    "socket": "AM5",
+    "price": 290
+  },
+  "ASRock X670E Pro RS": {
+    "socket": "AM5",
+    "price": 260
+  },
+  "ASUS ROG STRIX X670E-E GAMING WIFI": {
+    "socket": "AM5",
+    "price": 480
+  },
+  "GIGABYTE X670E AORUS MASTER": {
+    "socket": "AM5",
+    "price": 450
+  },
+  "MSI MEG X670E ACE": {
+    "socket": "AM5",
+    "price": 520
+  },
+  "ASRock X670E Taichi": {
+    "socket": "AM5",
+    "price": 500
+  },
+  "ASUS ROG CROSSHAIR X670E HERO": {
+    "socket": "AM5",
+    "price": 600
+  },
+  "ASRock B850M Pro-A": {
+    "socket": "AM5",
+    "price": 140
+  },
+  "ASUS TUF GAMING B850-PLUS WIFI": {
+    "socket": "AM5",
+    "price": 190
+  },
+  "MSI PRO B850-P WIFI": {
+    "socket": "AM5",
+    "price": 170
+  },
+  "GIGABYTE B850 GAMING X AX": {
+    "socket": "AM5",
+    "price": 165
+  },
+  "ASRock B850 Pro4": {
+    "socket": "AM5",
+    "price": 150
+  },
+  "ASUS PRIME B850-PLUS": {
+    "socket": "AM5",
+    "price": 160
+  },
+  "MSI MAG B850 TOMAHAWK WIFI": {
+    "socket": "AM5",
+    "price": 210
+  },
+  "ASRock B850M Pro4": {
+    "socket": "AM5",
+    "price": 130
+  },
+  "GIGABYTE X870 AORUS ELITE WIFI7": {
+    "socket": "AM5",
+    "price": 260
+  },
+  "ASUS TUF GAMING X870-PLUS WIFI": {
+    "socket": "AM5",
+    "price": 280
+  },
+  "MSI MAG X870 TOMAHAWK WIFI": {
+    "socket": "AM5",
+    "price": 300
+  },
+  "GIGABYTE X870 AORUS PRO WIFI7": {
+    "socket": "AM5",
+    "price": 340
+  },
+  "ASUS ROG STRIX X870E-E GAMING WIFI": {
+    "socket": "AM5",
+    "price": 500
+  },
+  "ASRock X870E Taichi": {
+    "socket": "AM5",
+    "price": 520
+  },
+  "MSI MEG X870E ACE": {
+    "socket": "AM5",
+    "price": 550
+  },
+  "ASUS ROG CROSSHAIR X870E HERO": {
+    "socket": "AM5",
+    "price": 600
+  }
+};
+
+const MOBO_DISPLAY = {
+  "ASRock A320M-HDV": "ASRock A320M-HDV",
+  "ASRock A520M Pro4": "ASRock A520M Pro4",
+  "ASRock A520M-HDV": "ASRock A520M-HDV",
+  "ASRock A620M Pro RS": "ASRock A620M Pro RS",
+  "ASRock A620M-HDV/M.2": "ASRock A620M-HDV/M.2",
+  "ASRock B150 Gaming K4": "ASRock B150 Gaming K4",
+  "ASRock B150M Pro4": "ASRock B150M Pro4",
+  "ASRock B360M Pro4": "ASRock B360M Pro4",
+  "ASRock B365M Pro4": "ASRock B365M Pro4",
+  "ASRock B450M Pro4": "ASRock B450M Pro4",
+  "ASRock B450M Steel Legend": "ASRock B450M Steel Legend",
+  "ASRock B460M Pro4": "ASRock B460M Pro4",
+  "ASRock B550 Pro4": "ASRock B550 Pro4",
+  "ASRock B550M Steel Legend": "ASRock B550M Steel Legend",
+  "ASRock B550M-ITX/ac": "ASRock B550M-ITX/ac",
+  "ASRock B560 Steel Legend": "ASRock B560 Steel Legend",
+  "ASRock B560M Pro4": "ASRock B560M Pro4",
+  "ASRock B650E Steel Legend": "ASRock B650E Steel Legend",
+  "ASRock B650E-C Phantom Gaming 4": "ASRock B650E-C Phantom Gaming 4",
+  "ASRock B650M Pro RS": "ASRock B650M Pro RS",
+  "ASRock B650M Pro4": "ASRock B650M Pro4",
+  "ASRock B650M Steel Legend": "ASRock B650M Steel Legend",
+  "ASRock B660M Pro RS": "ASRock B660M Pro RS",
+  "ASRock B660M Steel Legend": "ASRock B660M Steel Legend",
+  "ASRock B760 Steel Legend": "ASRock B760 Steel Legend",
+  "ASRock B760M Pro RS": "ASRock B760M Pro RS",
+  "ASRock B850 Pro4": "ASRock B850 Pro4",
+  "ASRock B850M Pro-A": "ASRock B850M Pro-A",
+  "ASRock B850M Pro4": "ASRock B850M Pro4",
+  "ASRock B85M Pro4": "ASRock B85M Pro4",
+  "ASRock B860 Steel Legend": "ASRock B860 Steel Legend",
+  "ASRock B860M Pro RS": "ASRock B860M Pro RS",
+  "ASRock Fatal1ty B450 Gaming-ITX/ac": "ASRock Fatal1ty B450 Gaming-ITX/ac",
+  "ASRock H110M-HDS": "ASRock H110M-HDS",
+  "ASRock H410M-HDV": "ASRock H410M-HDV",
+  "ASRock H610M-HDV/M.2": "ASRock H610M-HDV/M.2",
+  "ASRock H97M Pro4": "ASRock H97M Pro4",
+  "ASRock X570 Phantom Gaming 4": "ASRock X570 Phantom Gaming 4",
+  "ASRock X570 Steel Legend": "ASRock X570 Steel Legend",
+  "ASRock X570 Taichi": "ASRock X570 Taichi",
+  "ASRock X670E Pro RS": "ASRock X670E Pro RS",
+  "ASRock X670E Taichi": "ASRock X670E Taichi",
+  "ASRock X870E Taichi": "ASRock X870E Taichi",
+  "ASRock Z170 Extreme6": "ASRock Z170 Extreme6",
+  "ASRock Z390 Taichi": "ASRock Z390 Taichi",
+  "ASRock Z590 Taichi": "ASRock Z590 Taichi",
+  "ASRock Z690 Taichi": "ASRock Z690 Taichi",
+  "ASRock Z75 Pro3": "ASRock Z75 Pro3",
+  "ASRock Z790 Pro RS": "ASRock Z790 Pro RS",
+  "ASRock Z790 Taichi": "ASRock Z790 Taichi",
+  "ASRock Z890 Taichi": "ASRock Z890 Taichi",
+  "ASRock Z97 Extreme4": "ASRock Z97 Extreme4",
+  "ASRock Z97 Killer": "ASRock Z97 Killer",
+  "ASUS B150 PRO GAMING": "ASUS B150 PRO GAMING",
+  "ASUS B150M-A": "ASUS B150M-A",
+  "ASUS B85-PRO": "ASUS B85-PRO",
+  "ASUS B85M-G": "ASUS B85M-G",
+  "ASUS H110M-A": "ASUS H110M-A",
+  "ASUS H97M-E": "ASUS H97M-E",
+  "ASUS H97M-PLUS": "ASUS H97M-PLUS",
+  "ASUS P8Z77-V": "ASUS P8Z77-V",
+  "ASUS PRIME A320M-K": "ASUS PRIME A320M-K",
+  "ASUS PRIME A520M-K": "ASUS PRIME A520M-K",
+  "ASUS PRIME A620M-A": "ASUS PRIME A620M-A",
+  "ASUS PRIME B360-PLUS": "ASUS PRIME B360-PLUS",
+  "ASUS PRIME B365-PLUS": "ASUS PRIME B365-PLUS",
+  "ASUS PRIME B450M-A": "ASUS PRIME B450M-A",
+  "ASUS PRIME B460-PLUS": "ASUS PRIME B460-PLUS",
+  "ASUS PRIME B550-PLUS": "ASUS PRIME B550-PLUS",
+  "ASUS PRIME B560M-A": "ASUS PRIME B560M-A",
+  "ASUS PRIME B650-PLUS": "ASUS PRIME B650-PLUS",
+  "ASUS PRIME B650M-A": "ASUS PRIME B650M-A",
+  "ASUS PRIME B660M-A": "ASUS PRIME B660M-A",
+  "ASUS PRIME B760-PLUS": "ASUS PRIME B760-PLUS",
+  "ASUS PRIME B760-PLUS D4": "ASUS PRIME B760-PLUS D4",
+  "ASUS PRIME B850-PLUS": "ASUS PRIME B850-PLUS",
+  "ASUS PRIME H410M-A": "ASUS PRIME H410M-A",
+  "ASUS PRIME H510M-A": "ASUS PRIME H510M-A",
+  "ASUS PRIME H610M-E": "ASUS PRIME H610M-E",
+  "ASUS PRIME X570-P": "ASUS PRIME X570-P",
+  "ASUS PRIME X670-P": "ASUS PRIME X670-P",
+  "ASUS PRIME Z390-P": "ASUS PRIME Z390-P",
+  "ASUS PRIME Z590-A": "ASUS PRIME Z590-A",
+  "ASUS PRIME Z690-A": "ASUS PRIME Z690-A",
+  "ASUS ROG CROSSHAIR VIII FORMULA": "ASUS ROG CROSSHAIR VIII FORMULA",
+  "ASUS ROG CROSSHAIR VIII HERO": "ASUS ROG CROSSHAIR VIII HERO",
+  "ASUS ROG CROSSHAIR X670E HERO": "ASUS ROG CROSSHAIR X670E HERO",
+  "ASUS ROG CROSSHAIR X870E HERO": "ASUS ROG CROSSHAIR X870E HERO",
+  "ASUS ROG MAXIMUS Z790 HERO": "ASUS ROG MAXIMUS Z790 HERO",
+  "ASUS ROG MAXIMUS Z890 HERO": "ASUS ROG MAXIMUS Z890 HERO",
+  "ASUS ROG STRIX B450-F GAMING": "ASUS ROG STRIX B450-F GAMING",
+  "ASUS ROG STRIX B550-F GAMING": "ASUS ROG STRIX B550-F GAMING",
+  "ASUS ROG STRIX B560-F GAMING WIFI": "ASUS ROG STRIX B560-F GAMING WIFI",
+  "ASUS ROG STRIX B650-A GAMING WIFI": "ASUS ROG STRIX B650-A GAMING WIFI",
+  "ASUS ROG STRIX B650E-F GAMING WIFI": "ASUS ROG STRIX B650E-F GAMING WIFI",
+  "ASUS ROG STRIX B660-F GAMING WIFI": "ASUS ROG STRIX B660-F GAMING WIFI",
+  "ASUS ROG STRIX B760-F GAMING WIFI": "ASUS ROG STRIX B760-F GAMING WIFI",
+  "ASUS ROG STRIX X570-E GAMING": "ASUS ROG STRIX X570-E GAMING",
+  "ASUS ROG STRIX X670E-E GAMING WIFI": "ASUS ROG STRIX X670E-E GAMING WIFI",
+  "ASUS ROG STRIX X870E-E GAMING WIFI": "ASUS ROG STRIX X870E-E GAMING WIFI",
+  "ASUS ROG STRIX Z390-E GAMING": "ASUS ROG STRIX Z390-E GAMING",
+  "ASUS ROG STRIX Z590-E GAMING WIFI": "ASUS ROG STRIX Z590-E GAMING WIFI",
+  "ASUS ROG STRIX Z690-A GAMING WIFI": "ASUS ROG STRIX Z690-A GAMING WIFI",
+  "ASUS ROG STRIX Z790-E GAMING WIFI": "ASUS ROG STRIX Z790-E GAMING WIFI",
+  "ASUS ROG STRIX Z790-I GAMING WIFI": "ASUS ROG STRIX Z790-I GAMING WIFI",
+  "ASUS ROG STRIX Z890-E GAMING WIFI": "ASUS ROG STRIX Z890-E GAMING WIFI",
+  "ASUS TUF GAMING B450-PLUS": "ASUS TUF GAMING B450-PLUS",
+  "ASUS TUF GAMING B460-PLUS WIFI": "ASUS TUF GAMING B460-PLUS WIFI",
+  "ASUS TUF GAMING B550-PLUS": "ASUS TUF GAMING B550-PLUS",
+  "ASUS TUF GAMING B560M-PLUS WIFI": "ASUS TUF GAMING B560M-PLUS WIFI",
+  "ASUS TUF GAMING B650-PLUS WIFI": "ASUS TUF GAMING B650-PLUS WIFI",
+  "ASUS TUF GAMING B650M-PLUS WIFI": "ASUS TUF GAMING B650M-PLUS WIFI",
+  "ASUS TUF GAMING B660M-PLUS WIFI": "ASUS TUF GAMING B660M-PLUS WIFI",
+  "ASUS TUF GAMING B760-PLUS WIFI": "ASUS TUF GAMING B760-PLUS WIFI",
+  "ASUS TUF GAMING B760M-PLUS WIFI": "ASUS TUF GAMING B760M-PLUS WIFI",
+  "ASUS TUF GAMING B850-PLUS WIFI": "ASUS TUF GAMING B850-PLUS WIFI",
+  "ASUS TUF GAMING B860-PLUS WIFI": "ASUS TUF GAMING B860-PLUS WIFI",
+  "ASUS TUF GAMING X570-PLUS": "ASUS TUF GAMING X570-PLUS",
+  "ASUS TUF GAMING X670E-PLUS WIFI": "ASUS TUF GAMING X670E-PLUS WIFI",
+  "ASUS TUF GAMING X870-PLUS WIFI": "ASUS TUF GAMING X870-PLUS WIFI",
+  "ASUS TUF GAMING Z790-PLUS WIFI": "ASUS TUF GAMING Z790-PLUS WIFI",
+  "ASUS TUF GAMING Z890-PLUS WIFI": "ASUS TUF GAMING Z890-PLUS WIFI",
+  "ASUS Z170-A": "ASUS Z170-A",
+  "ASUS Z170-E": "ASUS Z170-E",
+  "ASUS Z97-A": "ASUS Z97-A",
+  "ASUS Z97-P": "ASUS Z97-P",
+  "ASUS Z97M-PLUS": "ASUS Z97M-PLUS",
+  "GIGABYTE A320M-S2H": "GIGABYTE A320M-S2H",
+  "GIGABYTE A520M S2H": "GIGABYTE A520M S2H",
+  "GIGABYTE A620M S2H": "GIGABYTE A620M S2H",
+  "GIGABYTE B360M DS3H": "GIGABYTE B360M DS3H",
+  "GIGABYTE B450 AORUS ELITE": "GIGABYTE B450 AORUS ELITE",
+  "GIGABYTE B450 AORUS M": "GIGABYTE B450 AORUS M",
+  "GIGABYTE B450M DS3H": "GIGABYTE B450M DS3H",
+  "GIGABYTE B460M DS3H AX": "GIGABYTE B460M DS3H AX",
+  "GIGABYTE B550 AORUS ELITE AX": "GIGABYTE B550 AORUS ELITE AX",
+  "GIGABYTE B550M AORUS PRO-P": "GIGABYTE B550M AORUS PRO-P",
+  "GIGABYTE B560I AORUS PRO AX": "GIGABYTE B560I AORUS PRO AX",
+  "GIGABYTE B560M AORUS ELITE": "GIGABYTE B560M AORUS ELITE",
+  "GIGABYTE B650 GAMING X AX": "GIGABYTE B650 GAMING X AX",
+  "GIGABYTE B650E AORUS MASTER": "GIGABYTE B650E AORUS MASTER",
+  "GIGABYTE B650M AORUS ELITE AX": "GIGABYTE B650M AORUS ELITE AX",
+  "GIGABYTE B650M GAMING X AX": "GIGABYTE B650M GAMING X AX",
+  "GIGABYTE B660M AORUS Pro AX": "GIGABYTE B660M AORUS Pro AX",
+  "GIGABYTE B660M DS3H AX DDR4": "GIGABYTE B660M DS3H AX DDR4",
+  "GIGABYTE B760 GAMING X AX": "GIGABYTE B760 GAMING X AX",
+  "GIGABYTE B760M AORUS ELITE AX": "GIGABYTE B760M AORUS ELITE AX",
+  "GIGABYTE B850 GAMING X AX": "GIGABYTE B850 GAMING X AX",
+  "GIGABYTE B860M GAMING X AX": "GIGABYTE B860M GAMING X AX",
+  "GIGABYTE GA-B150M-DS3H": "GIGABYTE GA-B150M-DS3H",
+  "GIGABYTE GA-B85M-DS3H-A": "GIGABYTE GA-B85M-DS3H-A",
+  "GIGABYTE GA-H110M-A": "GIGABYTE GA-H110M-A",
+  "GIGABYTE GA-H97-D3H": "GIGABYTE GA-H97-D3H",
+  "GIGABYTE GA-Z170X-Gaming 5": "GIGABYTE GA-Z170X-Gaming 5",
+  "GIGABYTE GA-Z77X-UD3H": "GIGABYTE GA-Z77X-UD3H",
+  "GIGABYTE GA-Z97X-Gaming 5": "GIGABYTE GA-Z97X-Gaming 5",
+  "GIGABYTE H410M H": "GIGABYTE H410M H",
+  "GIGABYTE H510M H": "GIGABYTE H510M H",
+  "GIGABYTE H610M H DDR4": "GIGABYTE H610M H DDR4",
+  "GIGABYTE X570 AORUS ELITE": "GIGABYTE X570 AORUS ELITE",
+  "GIGABYTE X570 AORUS ULTRA": "GIGABYTE X570 AORUS ULTRA",
+  "GIGABYTE X670 AORUS ELITE AX": "GIGABYTE X670 AORUS ELITE AX",
+  "GIGABYTE X670E AORUS MASTER": "GIGABYTE X670E AORUS MASTER",
+  "GIGABYTE X870 AORUS ELITE WIFI7": "GIGABYTE X870 AORUS ELITE WIFI7",
+  "GIGABYTE X870 AORUS PRO WIFI7": "GIGABYTE X870 AORUS PRO WIFI7",
+  "GIGABYTE Z390 AORUS PRO": "GIGABYTE Z390 AORUS PRO",
+  "GIGABYTE Z590 VISION G": "GIGABYTE Z590 VISION G",
+  "GIGABYTE Z690 AORUS MASTER": "GIGABYTE Z690 AORUS MASTER",
+  "GIGABYTE Z790 AORUS ELITE AX": "GIGABYTE Z790 AORUS ELITE AX",
+  "GIGABYTE Z790 AORUS MASTER": "GIGABYTE Z790 AORUS MASTER",
+  "GIGABYTE Z890 AORUS ELITE WIFI7": "GIGABYTE Z890 AORUS ELITE WIFI7",
+  "MSI A320M-A": "MSI A320M-A",
+  "MSI A520M-A": "MSI A520M-A",
+  "MSI A620M-A": "MSI A620M-A",
+  "MSI B150 Krait Gaming": "MSI B150 Krait Gaming",
+  "MSI B150M PRO-VDH": "MSI B150M PRO-VDH",
+  "MSI B360-A PRO": "MSI B360-A PRO",
+  "MSI B450 TOMAHAWK MAX": "MSI B450 TOMAHAWK MAX",
+  "MSI B450-A PRO MAX": "MSI B450-A PRO MAX",
+  "MSI B450M PRO-VDH MAX": "MSI B450M PRO-VDH MAX",
+  "MSI B460M PRO-VDH WIFI": "MSI B460M PRO-VDH WIFI",
+  "MSI B560M PRO-VDH WIFI": "MSI B560M PRO-VDH WIFI",
+  "MSI B85-G41 PC Mate": "MSI B85-G41 PC Mate",
+  "MSI H110M PRO-VD": "MSI H110M PRO-VD",
+  "MSI H410M PRO-VH": "MSI H410M PRO-VH",
+  "MSI H510M-A": "MSI H510M-A",
+  "MSI H610M-G": "MSI H610M-G",
+  "MSI H77MA-G45": "MSI H77MA-G45",
+  "MSI H97 PC-MATE": "MSI H97 PC-MATE",
+  "MSI MAG B460 TOMAHAWK": "MSI MAG B460 TOMAHAWK",
+  "MSI MAG B550 TOMAHAWK": "MSI MAG B550 TOMAHAWK",
+  "MSI MAG B560M MORTAR WIFI": "MSI MAG B560M MORTAR WIFI",
+  "MSI MAG B650 TOMAHAWK WIFI": "MSI MAG B650 TOMAHAWK WIFI",
+  "MSI MAG B650M MORTAR WIFI": "MSI MAG B650M MORTAR WIFI",
+  "MSI MAG B660M MORTAR WIFI": "MSI MAG B660M MORTAR WIFI",
+  "MSI MAG B760 TOMAHAWK WIFI": "MSI MAG B760 TOMAHAWK WIFI",
+  "MSI MAG B850 TOMAHAWK WIFI": "MSI MAG B850 TOMAHAWK WIFI",
+  "MSI MAG X670E TOMAHAWK WIFI": "MSI MAG X670E TOMAHAWK WIFI",
+  "MSI MAG X870 TOMAHAWK WIFI": "MSI MAG X870 TOMAHAWK WIFI",
+  "MSI MAG Z390 TOMAHAWK": "MSI MAG Z390 TOMAHAWK",
+  "MSI MAG Z590 TOMAHAWK WIFI": "MSI MAG Z590 TOMAHAWK WIFI",
+  "MSI MAG Z790 TOMAHAWK WIFI": "MSI MAG Z790 TOMAHAWK WIFI",
+  "MSI MAG Z890 TOMAHAWK WIFI": "MSI MAG Z890 TOMAHAWK WIFI",
+  "MSI MEG X570 UNIFY": "MSI MEG X570 UNIFY",
+  "MSI MEG X670E ACE": "MSI MEG X670E ACE",
+  "MSI MEG X870E ACE": "MSI MEG X870E ACE",
+  "MSI MEG Z690 ACE": "MSI MEG Z690 ACE",
+  "MSI MEG Z790 ACE": "MSI MEG Z790 ACE",
+  "MSI MPG B450 GAMING PLUS": "MSI MPG B450 GAMING PLUS",
+  "MSI MPG B550 GAMING PLUS": "MSI MPG B550 GAMING PLUS",
+  "MSI MPG B650I EDGE WIFI": "MSI MPG B650I EDGE WIFI",
+  "MSI MPG B660I GAMING EDGE WIFI": "MSI MPG B660I GAMING EDGE WIFI",
+  "MSI MPG B760I GAMING EDGE WIFI": "MSI MPG B760I GAMING EDGE WIFI",
+  "MSI MPG X570 GAMING PLUS": "MSI MPG X570 GAMING PLUS",
+  "MSI MPG Z790I EDGE WIFI": "MSI MPG Z790I EDGE WIFI",
+  "MSI PRO B650-P WIFI": "MSI PRO B650-P WIFI",
+  "MSI PRO B650M-A WIFI": "MSI PRO B650M-A WIFI",
+  "MSI PRO B660M-A": "MSI PRO B660M-A",
+  "MSI PRO B760M-A WIFI": "MSI PRO B760M-A WIFI",
+  "MSI PRO B850-P WIFI": "MSI PRO B850-P WIFI",
+  "MSI PRO B860M-A WIFI": "MSI PRO B860M-A WIFI",
+  "MSI Z170A GAMING M5": "MSI Z170A GAMING M5",
+  "MSI Z170A PC Mate": "MSI Z170A PC Mate",
+  "MSI Z390-A PRO": "MSI Z390-A PRO",
+  "MSI Z97-G55": "MSI Z97-G55",
+  "MSI Z97S SLI Plus": "MSI Z97S SLI Plus"
+};
+
+const MOBO_NAMES = Object.keys(MOBO_DISPLAY);
+
+const USECASE_REQUIREMENTS = {
+  "1080p": { gpu: 3.0, cpu: 3.5, label: "1080p gaming" },
+  "1440p": { gpu: 4.5, cpu: 5.0, label: "1440p gaming" },
+  "4k": { gpu: 6.5, cpu: 6.0, label: "4K gaming" },
+  "streaming": { gpu: 5.0, cpu: 6.5, label: "gaming + streaming/recording" },
+  "productivity": { gpu: 2.0, cpu: 4.5, label: "everyday use / productivity" }
+};
+
+const GAMES = [
+  { name: "Fortnite", gpuReq1080: 2.0, cpuReq: 3.0 },
+  { name: "Valorant", gpuReq1080: 1.0, cpuReq: 2.5 },
+  { name: "Rocket League", gpuReq1080: 1.2, cpuReq: 2.0 },
+  { name: "Minecraft (with shaders)", gpuReq1080: 2.5, cpuReq: 4.0 },
+  { name: "GTA V", gpuReq1080: 2.0, cpuReq: 3.0 },
+  { name: "Apex Legends", gpuReq1080: 2.5, cpuReq: 3.5 },
+  { name: "Call of Duty: Warzone", gpuReq1080: 4.0, cpuReq: 5.0 },
+  { name: "Elden Ring", gpuReq1080: 3.0, cpuReq: 3.5 },
+  { name: "Red Dead Redemption 2", gpuReq1080: 4.5, cpuReq: 4.0 },
+  { name: "Cyberpunk 2077", gpuReq1080: 5.0, cpuReq: 4.5 },
+  { name: "Black Myth: Wukong", gpuReq1080: 6.5, cpuReq: 5.0 }
+];
+
+const RES_SCALE = { "1080p": 1, "1440p": 1.45, "4k": 2.3 };
+const RES_LABELS = { "1080p": "1080p", "1440p": "1440p", "4k": "4K" };
+const RES_FROM_USECASE = { "1080p": "1080p", "1440p": "1440p", "4k": "4k", "streaming": "1080p", "productivity": "1080p" };
+
+const STORAGE_RATE = { hdd: 0.02, sata_ssd: 0.045, nvme_ssd: 0.06 };
+
+const GPU_UPGRADES = [
+  { minTier: 2.5, name: "NVIDIA GTX 1660 Super", price: "$120-140 used" },
+  { minTier: 3.5, name: "NVIDIA RTX 3050", price: "$180-210" },
+  { minTier: 4.5, name: "NVIDIA RTX 4060", price: "$280-300" },
+  { minTier: 5.5, name: "AMD RX 7700 XT", price: "$380-420" },
+  { minTier: 6.5, name: "NVIDIA RTX 4070 Super", price: "$550-600" },
+  { minTier: 7.5, name: "NVIDIA RTX 4070 Ti Super", price: "$750-800" },
+  { minTier: 9, name: "NVIDIA RTX 4080 Super", price: "$950-1000" },
+  { minTier: 9.5, name: "NVIDIA RTX 5080", price: "$1000-1100" },
+  { minTier: 11, name: "NVIDIA RTX 5090", price: "$1900-2200" }
+];
+
+const CPU_UPGRADES = [
+  { minTier: 4, name: "Intel Core i5-12400F", price: "$120-140" },
+  { minTier: 5, name: "AMD Ryzen 5 5600", price: "$110-130" },
+  { minTier: 6, name: "Intel Core i5-13600K", price: "$250-280" },
+  { minTier: 6.5, name: "AMD Ryzen 7 5800X3D", price: "$220-250" },
+  { minTier: 7, name: "Intel Core i7-13700K", price: "$330-360" },
+  { minTier: 7.5, name: "AMD Ryzen 7 7800X3D", price: "$380-420" },
+  { minTier: 8, name: "Intel Core i9-14900K", price: "$500-550" },
+  { minTier: 8.3, name: "AMD Ryzen 7 9800X3D", price: "$430-470" },
+  { minTier: 8.6, name: "Intel Core Ultra 9 285K", price: "$550-600" }
+];
+
+const AMAZON_TAG = "pcbuddy0df-20";
+function shopLink(name) {
+  const tag = AMAZON_TAG ? `&tag=${AMAZON_TAG}` : "";
+  return `https://www.amazon.com/s?k=${encodeURIComponent(name)}${tag}`;
+}
+
+// ================= Brand detection + icons =================
+
+const BRAND_COLORS = { intel: "#4f9eff", amd: "#ff6b6b", nvidia: "#3ecf8e" };
+
+function detectBrand(raw, kind) {
+  const s = raw.toUpperCase();
+  if (kind === "cpu") {
+    if (s.includes("AMD") || s.includes("RYZEN")) return { name: "AMD", color: BRAND_COLORS.amd };
+    return { name: "Intel", color: BRAND_COLORS.intel };
+  } else if (kind === "gpu") {
+    if (s.includes("ARC") || s.includes("INTEL")) return { name: "Intel", color: BRAND_COLORS.intel };
+    if (s.includes("AMD") || s.includes("RX")) return { name: "AMD", color: BRAND_COLORS.amd };
+    return { name: "NVIDIA", color: BRAND_COLORS.nvidia };
+  } else {
+    const info = getMoboInfo(raw);
+    if (info && info.socket.startsWith("AM")) return { name: "AMD platform", color: BRAND_COLORS.amd };
+    if (info) return { name: "Intel platform", color: BRAND_COLORS.intel };
+    return { name: "", color: "#7f8595" };
+  }
+}
+
+function chipIcon(color) {
+  return `<svg width="28" height="28" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="8" y="8" width="14" height="14" rx="2" stroke="${color}" stroke-width="1.6"/>
+    <rect x="12" y="12" width="6" height="6" rx="1" fill="${color}" opacity="0.5"/>
+    <g stroke="${color}" stroke-width="1.4">
+      <line x1="8" y1="12" x2="4" y2="12"/><line x1="8" y1="17" x2="4" y2="17"/>
+      <line x1="22" y1="12" x2="26" y2="12"/><line x1="22" y1="17" x2="26" y2="17"/>
+      <line x1="12" y1="8" x2="12" y2="4"/><line x1="17" y1="8" x2="17" y2="4"/>
+      <line x1="12" y1="22" x2="12" y2="26"/><line x1="17" y1="22" x2="17" y2="26"/>
+    </g>
+  </svg>`;
+}
+
+function gpuIcon(color) {
+  return `<svg width="32" height="28" viewBox="0 0 34 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="6" width="28" height="14" rx="2" stroke="${color}" stroke-width="1.6"/>
+    <rect x="3" y="20" width="6" height="4" rx="1" fill="${color}" opacity="0.5"/>
+    <circle cx="10" cy="13" r="3.4" stroke="${color}" stroke-width="1.3"/>
+    <circle cx="19" cy="13" r="3.4" stroke="${color}" stroke-width="1.3"/>
+    <line x1="25" y1="9" x2="29" y2="9" stroke="${color}" stroke-width="1.4"/>
+    <line x1="25" y1="17" x2="29" y2="17" stroke="${color}" stroke-width="1.4"/>
+  </svg>`;
+}
+
+function moboIcon(color) {
+  return `<svg width="28" height="28" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="4" width="22" height="22" rx="2" stroke="${color}" stroke-width="1.6"/>
+    <rect x="8" y="8" width="6" height="6" fill="${color}" opacity="0.5"/>
+    <circle cx="20" cy="10" r="1.6" fill="${color}"/>
+    <circle cx="20" cy="15" r="1.6" fill="${color}"/>
+    <line x1="8" y1="19" x2="22" y2="19" stroke="${color}" stroke-width="1.2"/>
+    <line x1="8" y1="22" x2="18" y2="22" stroke="${color}" stroke-width="1.2"/>
+  </svg>`;
+}
+
+function updatePreview(kind, raw, tier) {
+  const el = document.getElementById(kind + "-preview");
+  if (!raw || tier === null) { el.classList.remove("show"); el.innerHTML = ""; return; }
+  const brand = detectBrand(raw, kind);
+  const icon = kind === "cpu" ? chipIcon(brand.color) : kind === "gpu" ? gpuIcon(brand.color) : moboIcon(brand.color);
+  const badge = brand.name ? `<span class="badge" style="background:${brand.color}22;color:${brand.color}">${brand.name}</span>` : "";
+  el.innerHTML = `${icon}<span>${raw}</span>${badge}`;
+  el.classList.add("show");
+}
+
+// ================= Matching =================
+// Matches free-typed text (which may include a brand prefix like "AMD" or
+// "Intel Core") against a lookup table's keys. Falls back to the longest
+// key whose normalized form is contained in the input, so e.g. "RTX 4070 Ti"
+// resolves to "RTX 4070 TI" rather than the shorter "RTX 4070".
+
+function normalize(str) { return str.toUpperCase().replace(/\s+/g, " ").trim(); }
+function compact(str) { return str.replace(/[\s-]/g, ""); }
+
+function bestKeyMatch(raw, keys) {
+  if (!raw) return null;
+  const input = compact(normalize(raw));
+  for (const k of keys) {
+    if (compact(k) === input) return k;
+  }
+  let best = null, bestLen = 0;
+  for (const k of keys) {
+    const kc = compact(k);
+    if (input.includes(kc) && kc.length > bestLen) { best = k; bestLen = kc.length; }
+  }
+  return best;
+}
+
+function getGpuTier(raw) { const k = bestKeyMatch(raw, Object.keys(GPU_TIERS)); return k ? GPU_TIERS[k] : null; }
+function getCpuTier(raw) { const k = bestKeyMatch(raw, Object.keys(CPU_TIERS)); return k ? CPU_TIERS[k] : null; }
+function lookupKey(raw, table) { return bestKeyMatch(raw, Object.keys(table)); }
+function getMoboInfo(raw) { const k = bestKeyMatch(raw, Object.keys(MOBO_DB)); return k ? MOBO_DB[k] : null; }
+
+function suggestUpgrades(currentTier, table) {
+  return table.filter(u => u.minTier > (currentTier === null ? 0 : currentTier)).slice(0, 3);
+}
+
+function estCpuWatts(tier) { if (tier === null) return 90; return Math.round(65 + (tier - 2) * 32.4); }
+function estGpuWatts(tier) { if (tier === null) return 120; return Math.round(75 + (tier - 1.5) * 46.9); }
+function cpuPrice(tier) { if (tier === null) return 0; return Math.round((30 + tier * 55) / 5) * 5; }
+function gpuPrice(tier) { if (tier === null) return 0; return Math.round((60 + Math.pow(tier, 1.7) * 23) / 5) * 5; }
+
+function psuShortfall(cpuTierVal, gpuTierVal, currentPsu) {
+  if (!currentPsu || currentPsu === "notsure") return null;
+  const cpuW = estCpuWatts(cpuTierVal);
+  const gpuW = estGpuWatts(gpuTierVal);
+  const estimatedDraw = cpuW + gpuW + 90;
+  const recommendedPsu = Math.ceil((estimatedDraw * 1.3) / 50) * 50;
+  const psuW = currentPsu === "1000" ? 1000 : parseInt(currentPsu, 10);
+  if (psuW >= recommendedPsu) return null;
+  return { estimatedDraw, recommendedPsu, psuW };
+}
+
+// ================= FPS estimation =================
+
+function fpsForGame(game, resKey, cpuTier, gpuTier) {
+  if (cpuTier === null || gpuTier === null) return null;
+  const scale = RES_SCALE[resKey];
+  const gpuReq = game.gpuReq1080 * scale;
+  const fpsGpu = 60 * Math.pow(Math.max(gpuTier, 0.1) / gpuReq, 0.9);
+  const fpsCpu = 60 * Math.pow(Math.max(cpuTier, 0.1) / game.cpuReq, 0.8);
+  let fps = Math.min(fpsGpu, fpsCpu, 400);
+  fps = Math.max(fps, 5);
+  return Math.round(fps / 5) * 5;
+}
+
+function requiredTierForFps(game, resKey, targetFps) {
+  const scale = RES_SCALE[resKey];
+  const gpuReq = game.gpuReq1080 * scale * Math.pow(targetFps / 60, 1 / 0.9);
+  const cpuReq = game.cpuReq * Math.pow(targetFps / 60, 1 / 0.8);
+  return { gpuReq, cpuReq };
+}
+
+// ================= Build value =================
+
+function estimateBuildValue(inputs, cpuTier, gpuTier, moboInfo) {
+  const items = [];
+  if (cpuTier !== null) items.push({ label: inputs.cpuInput, price: cpuPrice(cpuTier) });
+  if (gpuTier !== null) items.push({ label: inputs.gpuInput, price: gpuPrice(gpuTier) });
+  items.push({ label: inputs.ram + "GB RAM", price: Math.round(inputs.ram * 3.2 / 5) * 5 });
+
+  const capLabel = inputs.storageCap >= 1024 ? (inputs.storageCap / 1024) + "TB" : inputs.storageCap + "GB";
+  const typeLabel = inputs.storageType === "hdd" ? "HDD" : inputs.storageType === "sata_ssd" ? "SATA SSD" : "NVMe SSD";
+  items.push({ label: `${capLabel} ${typeLabel}`, price: Math.round(inputs.storageCap * STORAGE_RATE[inputs.storageType] / 5) * 5 });
+
+  if (inputs.psu !== "notsure") {
+    const w = inputs.psu === "1000" ? 1000 : parseInt(inputs.psu, 10);
+    items.push({ label: w + "W power supply", price: Math.round(w * 0.11 / 5) * 5 });
+  } else {
+    items.push({ label: "Power supply (assumed 550W)", price: Math.round(550 * 0.11 / 5) * 5 });
+  }
+
+  if (moboInfo) {
+    items.push({ label: inputs.moboInput, price: moboInfo.price });
+  } else {
+    items.push({ label: "Motherboard (assumed)", price: 110 });
+  }
+
+  const coolPrice = inputs.cooling === "stock" ? 0 : inputs.cooling === "air" ? 40 : 90;
+  if (coolPrice > 0) items.push({ label: inputs.cooling === "air" ? "Aftermarket air cooler" : "AIO liquid cooler", price: coolPrice });
+
+  const total = items.reduce((s, i) => s + i.price, 0);
+  return { items, total };
+}
+
+// ================= Custom autocomplete =================
+
+function setupAutocomplete(inputId, listId, dataArray, kind, lookupFn) {
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  let activeIndex = -1;
+
+  function render(matches) {
+    list.innerHTML = "";
+    if (matches.length === 0) { list.classList.remove("open"); return; }
+    matches.slice(0, 8).forEach((m) => {
+      const brand = detectBrand(m, kind);
+      const item = document.createElement("div");
+      item.className = "ac-item";
+      item.innerHTML = `<span class="ac-dot" style="background:${brand.color}"></span><span>${m}</span>`;
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        input.value = m;
+        list.classList.remove("open");
+        updatePreview(kind, m, lookupFn(m));
+      });
+      list.appendChild(item);
+    });
+    activeIndex = -1;
+    list.classList.add("open");
+  }
+
+  input.addEventListener("input", () => {
+    const val = input.value.trim();
+    updatePreview(kind, val, lookupFn(val));
+    if (!val) { list.classList.remove("open"); return; }
+    const q = val.toUpperCase();
+    const matches = dataArray.filter(m => m.toUpperCase().includes(q));
+    render(matches);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    const items = list.querySelectorAll(".ac-item");
+    if (!list.classList.contains("open") || items.length === 0) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); activeIndex = Math.min(activeIndex + 1, items.length - 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); }
+    else if (e.key === "Enter") {
+      if (activeIndex >= 0) { e.preventDefault(); items[activeIndex].dispatchEvent(new Event("mousedown")); }
+      return;
+    } else if (e.key === "Escape") { list.classList.remove("open"); return; }
+    else return;
+    items.forEach((it, i) => it.classList.toggle("active", i === activeIndex));
+    items[activeIndex].scrollIntoView({ block: "nearest" });
+  });
+
+  input.addEventListener("blur", () => { setTimeout(() => list.classList.remove("open"), 100); });
+  input.addEventListener("focus", () => { if (input.value.trim()) input.dispatchEvent(new Event("input")); });
+}
+
+setupAutocomplete("cpu", "cpu-ac", CPU_LIST, "cpu", getCpuTier);
+setupAutocomplete("gpu", "gpu-ac", GPU_LIST, "gpu", getGpuTier);
+setupAutocomplete("mobo", "mobo-ac", MOBO_NAMES, "mobo", (raw) => getMoboInfo(raw) ? 1 : null);
+
+// ================= Analyze =================
+
+function analyzePC() {
+  const loading = document.getElementById("loading");
+  const results = document.getElementById("results");
+  results.style.display = "none";
+  results.innerHTML = "";
+  loading.classList.add("show");
+
+  try {
+    const inputs = {
+      cpuInput: document.getElementById("cpu").value.trim(),
+      gpuInput: document.getElementById("gpu").value.trim(),
+      moboInput: document.getElementById("mobo").value.trim(),
+      ram: parseInt(document.getElementById("ram").value, 10),
+      storageType: document.getElementById("storagetype").value,
+      storageCap: parseInt(document.getElementById("storagecap").value, 10),
+      psu: document.getElementById("psu").value,
+      cooling: document.getElementById("cooling").value,
+      usecase: document.getElementById("usecase").value
+    };
+
+    setTimeout(() => {
+      loading.classList.remove("show");
+      try {
+        renderResults(inputs);
+      } catch (e) {
+        loading.classList.remove("show");
+        results.style.display = "block";
+        results.innerHTML = "<pre style='color:#e2665a;background:#1a1415;padding:12px;border-left:3px solid #e2665a;white-space:pre-wrap;font-family:monospace;font-size:13px;'>renderResults error: " + e.message + "\n\n" + e.stack + "</pre>";
+      }
+    }, 550);
+  } catch (e) {
+    loading.classList.remove("show");
+    results.style.display = "block";
+    results.innerHTML = "<pre style='color:#e2665a;background:#1a1415;padding:12px;border-left:3px solid #e2665a;white-space:pre-wrap;font-family:monospace;font-size:13px;'>analyzePC error: " + e.message + "\n\n" + e.stack + "</pre>";
+  }
+}
+
+function renderResults(inputs) {
+  const { cpuInput, gpuInput, moboInput, ram, storageType, storageCap, psu, cooling, usecase } = inputs;
+  const results = document.getElementById("results");
+  results.style.display = "block";
+
+  const recs = [];
+  const cpuTier = cpuInput ? getCpuTier(cpuInput) : null;
+  const gpuTier = gpuInput ? getGpuTier(gpuInput) : null;
+  const cpuKey = cpuInput ? lookupKey(cpuInput, CPU_TIERS) : null;
+  const moboInfo = moboInput ? getMoboInfo(moboInput) : null;
+  const req = USECASE_REQUIREMENTS[usecase];
+  let scorePenalty = 0;
+  let scoreBonus = 0;
+
+  // ---- RAM ----
+  if (ram <= 8) {
+    recs.push({ text: "Upgrade RAM to 16GB. 8GB is a real bottleneck for modern games and multitasking, and it's usually the cheapest upgrade you can make.", type: "priority" });
+    scorePenalty += 10;
+  } else if (ram >= 16 && ram < 32 && gpuTier !== null && gpuTier >= 6.5) {
+    recs.push({ text: "With a high-end GPU, bumping RAM to 32GB can help in newer games and heavy multitasking.", type: "warn" });
+  } else {
+    recs.push({ text: `${ram}GB of RAM is solid for ${req.label}.`, type: "good" });
+    scoreBonus += 4;
+  }
+
+  // ---- CPU vs GPU bottleneck ----
+  if (cpuTier !== null && gpuTier !== null) {
+    const diff = gpuTier - cpuTier;
+    if (diff > 1.5) {
+      const cpuSuggestions = suggestUpgrades(cpuTier, CPU_UPGRADES);
+      recs.push({
+        text: `Your GPU (${gpuInput}) is noticeably stronger than your CPU (${cpuInput}). The CPU is likely holding back your GPU's performance — a CPU upgrade would give the biggest gains.`,
+        type: "priority",
+        suggestions: cpuSuggestions
+      });
+      scorePenalty += 8;
+      if (cpuSuggestions.length) {
+        const shortfall = psuShortfall(cpuSuggestions[0].minTier, gpuTier, psu);
+        if (shortfall) {
+          recs.push({
+            text: `Also worth budgeting for: a CPU like ${cpuSuggestions[0].name} paired with your current GPU would draw roughly ${shortfall.estimatedDraw}W under load — above what your ${shortfall.psuW}W power supply comfortably handles. You'd want at least a ${shortfall.recommendedPsu}W unit alongside that CPU upgrade.`,
+            type: "warn"
+          });
+        }
+      }
+    } else if (diff < -1.5) {
+      const gpuSuggestions = suggestUpgrades(gpuTier, GPU_UPGRADES);
+      recs.push({
+        text: `Your CPU (${cpuInput}) is noticeably stronger than your GPU (${gpuInput}). The GPU is your main bottleneck for gaming performance — a GPU upgrade would give the biggest gains.`,
+        type: "priority",
+        suggestions: gpuSuggestions
+      });
+      scorePenalty += 8;
+      if (gpuSuggestions.length) {
+        const shortfall = psuShortfall(cpuTier, gpuSuggestions[0].minTier, psu);
+        if (shortfall) {
+          recs.push({
+            text: `Also worth budgeting for: a GPU like ${gpuSuggestions[0].name} would push your estimated draw to roughly ${shortfall.estimatedDraw}W under load — above what your ${shortfall.psuW}W power supply comfortably handles. You'd want at least a ${shortfall.recommendedPsu}W unit alongside that GPU upgrade.`,
+            type: "warn"
+          });
+        }
+      }
+    } else {
+      recs.push({ text: `Your CPU (${cpuInput}) and GPU (${gpuInput}) are reasonably balanced for each other.`, type: "good" });
+      scoreBonus += 6;
+    }
+  } else {
+    if (cpuInput && cpuTier === null) recs.push({ text: `Couldn't recognize "${cpuInput}" — try picking one from the suggestions as you type.`, type: "" });
+    if (gpuInput && gpuTier === null) recs.push({ text: `Couldn't recognize "${gpuInput}" — try picking one from the suggestions as you type.`, type: "" });
+    if (!cpuInput) recs.push({ text: "Enter a CPU to get a bottleneck analysis.", type: "" });
+    if (!gpuInput) recs.push({ text: "Enter a GPU to get a bottleneck analysis.", type: "" });
+  }
+
+  // ---- Use-case fit ----
+  if (gpuTier !== null || cpuTier !== null) {
+    const shortfalls = [];
+    if (gpuTier !== null && gpuTier < req.gpu) shortfalls.push("GPU");
+    if (cpuTier !== null && cpuTier < req.cpu) shortfalls.push("CPU");
+    if (shortfalls.length === 0) {
+      recs.push({ text: `Your setup meets what's typically needed for ${req.label}.`, type: "good" });
+      scoreBonus += 4;
+    } else {
+      recs.push({
+        text: `For ${req.label}, your ${shortfalls.join(" and ")} ${shortfalls.length > 1 ? "are" : "is"} below what's typically recommended. Consider dropping to a lower resolution/settings, or upgrading the part(s) above.`,
+        type: "warn"
+      });
+      scorePenalty += 6;
+    }
+  }
+
+  // ---- Motherboard compatibility ----
+  if (moboInfo && cpuKey) {
+    const cpuSocket = CPU_SOCKETS[cpuKey];
+    if (cpuSocket && cpuSocket !== moboInfo.socket) {
+      recs.push({
+        text: `Compatibility issue: your CPU (${cpuInput}) uses the ${SOCKET_LABELS[cpuSocket]} socket, but ${moboInput} is a ${SOCKET_LABELS[moboInfo.socket]} board. These won't physically fit together — you'd need a ${SOCKET_LABELS[cpuSocket]} board instead.`,
+        type: "priority"
+      });
+      scorePenalty += 15;
+    } else if (cpuSocket) {
+      recs.push({ text: `${moboInput} matches your CPU's socket (${SOCKET_LABELS[cpuSocket]}) — no compatibility issue there.`, type: "good" });
+    }
+  } else if (moboInput && !moboInfo) {
+    recs.push({ text: `Couldn't recognize "${moboInput}" — try picking one from the suggestions as you type.`, type: "" });
+  }
+
+  // ---- Storage ----
+  if (storageType === "hdd") {
+    recs.push({
+      text: "You're running on a hard drive only. Switching to an NVMe SSD is one of the biggest quality-of-life upgrades available — much faster boot times, load times, and general responsiveness.",
+      type: "priority",
+      suggestions: [{ name: `NVMe SSD (${storageCap >= 1024 ? "1TB" : "500GB"})`, price: storageCap >= 1024 ? "$60-80" : "$35-45" }]
+    });
+    scorePenalty += 10;
+  } else if (storageCap <= 256) {
+    recs.push({ text: `${storageCap}GB fills up fast with modern games. Consider adding a second drive or upgrading capacity if you're frequently uninstalling things to make room.`, type: "warn" });
+    scorePenalty += 3;
+  } else {
+    recs.push({ text: `Your ${storageType === "nvme_ssd" ? "NVMe SSD" : "SATA SSD"} setup at ${storageCap >= 1024 ? (storageCap / 1024) + "TB" : storageCap + "GB"} is in good shape.`, type: "good" });
+    scoreBonus += 3;
+  }
+
+  // ---- Power supply ----
+  if (cpuTier !== null || gpuTier !== null) {
+    const cpuW = estCpuWatts(cpuTier);
+    const gpuW = estGpuWatts(gpuTier);
+    const overhead = 90;
+    const estimatedDraw = cpuW + gpuW + overhead;
+    const recommendedPsu = Math.ceil((estimatedDraw * 1.3) / 50) * 50;
+
+    if (psu === "notsure") {
+      recs.push({ text: `Your setup draws roughly ${estimatedDraw}W under load (estimated). Aim for a PSU rated at least ${recommendedPsu}W from a reputable brand for safe headroom.`, type: "" });
+    } else {
+      const psuW = psu === "1000" ? 1000 : parseInt(psu, 10);
+      if (psuW < recommendedPsu) {
+        recs.push({
+          text: `Your ${psuW}W power supply is cutting it close — your setup draws roughly ${estimatedDraw}W under load (estimated), and you'd want at least ${recommendedPsu}W for safe headroom.`,
+          type: "priority",
+          suggestions: [{ name: `${recommendedPsu}W 80+ Bronze or better`, price: recommendedPsu >= 850 ? "$90-120" : "$55-75" }]
+        });
+        scorePenalty += 10;
+      } else {
+        recs.push({ text: `Your ${psuW}W power supply comfortably covers your estimated ${estimatedDraw}W load.`, type: "good" });
+        scoreBonus += 3;
+      }
+    }
+  }
+
+  // ---- Cooling ----
+  if (cpuTier !== null && cpuTier >= 6.5 && cooling === "stock") {
+    recs.push({
+      text: `Your CPU (${cpuInput}) runs hot under load, and a stock cooler will likely cause thermal throttling, especially during longer gaming or rendering sessions. An aftermarket cooler would let it sustain higher clocks.`,
+      type: "priority",
+      suggestions: [
+        { name: "Mid-range air cooler (tower cooler)", price: "$30-50" },
+        { name: "240mm AIO liquid cooler", price: "$70-100" }
+      ]
+    });
+    scorePenalty += 7;
+  } else if (cooling !== "stock") {
+    recs.push({ text: "Your cooling setup gives you good thermal headroom for sustained performance.", type: "good" });
+    scoreBonus += 2;
+  } else {
+    recs.push({ text: "Stock cooling is fine for your current CPU's power draw.", type: "good" });
+  }
+
+  // ---- Monitor headroom ----
+  if (gpuTier !== null && gpuTier >= req.gpu + 2 && (usecase === "1080p" || usecase === "1440p")) {
+    recs.push({
+      text: `Your GPU (${gpuInput}) has a lot of headroom for ${req.label} — if your monitor is 60Hz or a lower resolution than what your PC can push, a higher refresh-rate (144Hz+) or higher-resolution display would let you actually see the extra performance you already have.`,
+      type: "warn"
+    });
+  }
+
+  // ---- Overall score + breakdown ----
+  const baseTierScore = ((cpuTier || 0) + (gpuTier || 0)) / 2 * 10;
+  let score = Math.round(baseTierScore + scoreBonus - scorePenalty);
+  score = Math.max(0, Math.min(100, score));
+
+  let scoreLabel, scoreColor;
+  if (score >= 80) { scoreLabel = "Great shape"; scoreColor = "var(--signal)"; }
+  else if (score >= 60) { scoreLabel = "Good, minor upgrades possible"; scoreColor = "var(--copper-bright)"; }
+  else if (score >= 40) { scoreLabel = "Needs some upgrades"; scoreColor = "var(--warn)"; }
+  else { scoreLabel = "Due for a refresh"; scoreColor = "var(--alert)"; }
+
+  const cpuSub = cpuTier !== null ? Math.round(Math.min(cpuTier / 8.2, 1) * 100) : null;
+  const gpuSub = gpuTier !== null ? Math.round(Math.min(gpuTier / 11.5, 1) * 100) : null;
+  const ramSub = ram >= 32 ? 100 : ram === 16 ? 75 : ram === 8 ? 40 : 20;
+  const stoSub = storageType === "nvme_ssd" ? (storageCap >= 512 ? 100 : 80) : storageType === "sata_ssd" ? 60 : 30;
+  const coolSub = cooling === "aio" ? 100 : cooling === "air" ? 80 : (cpuTier !== null && cpuTier >= 6.5 ? 40 : 70);
+
+  const subs = [
+    { label: "CPU", val: cpuSub }, { label: "GPU", val: gpuSub }, { label: "RAM", val: ramSub },
+    { label: "Storage", val: stoSub }, { label: "Cooling", val: coolSub }
+  ].filter(s => s.val !== null);
+
+  const meterHtml = subs.map(s => `
+    <div class="meter-row">
+      <div class="meter-label"><span>${s.label}</span><span>${s.val}</span></div>
+      <div class="meter-track"><div class="meter-fill" style="width:${s.val}%;background:${s.val >= 70 ? "var(--signal)" : s.val >= 45 ? "var(--warn)" : "var(--alert)"}"></div></div>
+    </div>`).join("");
+
+  const topPriorities = recs.filter(r => r.type === "priority").slice(0, 3);
+  const topHtml = topPriorities.length
+    ? `<div class="top-fix"><div class="top-fix-title">Top things to fix</div>${topPriorities.map((r, i) => `<div class="item">${i + 1}. ${r.text}</div>`).join("")}</div>`
+    : `<div class="top-fix" style="border-left-color:var(--signal);"><div class="top-fix-title" style="color:var(--signal);">Top things to fix</div><div class="item">No major issues found — nice setup.</div></div>`;
+
+  const scoreBlock = document.createElement("div");
+  scoreBlock.innerHTML = `
+    <div class="gauge-block">
+      <div class="gauge-ring" style="--score:${score}; --gauge-color:${scoreColor};">
+        <div class="gauge-center">
+          <div class="gauge-num">${score}<span>/100</span></div>
+          <div class="gauge-tag" style="color:${scoreColor}">${scoreLabel}</div>
+        </div>
+      </div>
+      <div class="meters">${meterHtml}</div>
+    </div>
+    ${topHtml}
+    <details class="howcalc">
+      <summary>How is this score calculated?</summary>
+      <p>It blends your CPU and GPU's estimated performance tier with RAM amount, storage type, and whether your cooling matches your CPU's heat output relative to what's typically needed for your selected use case. It's a general guide built from tier comparisons, not a measured benchmark.</p>
+    </details>
+  `;
+  results.appendChild(scoreBlock);
+
+  // ---- Recommendation rail ----
+  const rail = document.createElement("div");
+  rail.className = "rail";
+  recs.forEach((r) => {
+    const item = document.createElement("div");
+    item.className = "rail-item" + (r.type ? " is-" + r.type : "");
+
+    const p = document.createElement("p");
+    p.textContent = r.text;
+    item.appendChild(p);
+
+    if (r.suggestions && r.suggestions.length > 0) {
+      const ul = document.createElement("ul");
+      r.suggestions.forEach(s => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${s.name}</span><span class="price">(${s.price})</span><a class="shop-link" href="${shopLink(s.name)}" target="_blank" rel="noopener noreferrer sponsored">View price</a>`;
+        ul.appendChild(li);
+      });
+      item.appendChild(ul);
+    }
+    rail.appendChild(item);
+  });
+  results.appendChild(rail);
+
+  // ---- FPS table ----
+  const resKey = RES_FROM_USECASE[usecase];
+  const fpsBlock = document.createElement("div");
+  fpsBlock.className = "section-block";
+  if (cpuTier !== null && gpuTier !== null) {
+    const rows = GAMES.map(g => {
+      const fps = fpsForGame(g, resKey, cpuTier, gpuTier);
+      const color = fps >= 60 ? "var(--signal)" : fps >= 30 ? "var(--warn)" : "var(--alert)";
+      return `<tr><td>${g.name}</td><td class="fps" style="color:${color}">${fps} FPS</td></tr>`;
+    }).join("");
+    fpsBlock.innerHTML = `<div class="section-title">Estimated FPS at ${RES_LABELS[resKey]}</div><p class="sub small">High settings, estimated from tier comparisons.</p>
+      <table class="readout-table"><thead><tr><th>Game</th><th class="num">FPS</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } else {
+    fpsBlock.innerHTML = `<div class="section-title">Estimated FPS in popular games</div><p class="sub small">Enter both a CPU and GPU to see estimated FPS across popular games.</p>`;
+  }
+  results.appendChild(fpsBlock);
+
+  // ---- Build value ----
+  const bv = estimateBuildValue(inputs, cpuTier, gpuTier, moboInfo);
+  const bvBlock = document.createElement("div");
+  bvBlock.className = "section-block";
+  const bvRows = bv.items.map(i => `<div class="v-row"><span>${i.label}</span><span>$${i.price}</span></div>`).join("");
+  bvBlock.innerHTML = `
+    <div class="section-title">Estimated build value</div>
+    <div class="value-list">
+      ${bvRows}
+      <div class="v-total"><span>Total</span><span>$${bv.total}</span></div>
+    </div>
+    <div class="bv-note">Rough estimate based on typical current prices — actual value varies by condition, deals, and timing.</div>
+  `;
+  results.appendChild(bvBlock);
+
+  // ---- Target FPS planner ----
+  const plannerBlock = document.createElement("div");
+  plannerBlock.className = "section-block";
+  plannerBlock.innerHTML = `
+    <div class="section-title">Want higher FPS in a specific game?</div>
+    <div class="grid2" style="margin: 14px 0;">
+      <div>
+        <label style="margin-bottom:6px;">Game</label>
+        <select id="plan-game">${GAMES.map(g => `<option value="${g.name}">${g.name}</option>`).join("")}</select>
+      </div>
+      <div>
+        <label style="margin-bottom:6px;">Target FPS</label>
+        <select id="plan-fps">
+          <option value="30">30 FPS</option>
+          <option value="60" selected>60 FPS</option>
+          <option value="90">90 FPS</option>
+          <option value="144">144 FPS</option>
+          <option value="200">200 FPS</option>
+        </select>
+      </div>
+    </div>
+    <label style="margin-bottom:6px;">Resolution</label>
+    <select id="plan-res" style="margin-bottom:14px;">
+      <option value="1080p">1080p</option>
+      <option value="1440p">1440p</option>
+      <option value="4k">4K</option>
+    </select>
+    <button class="analyze" id="plan-btn" style="margin-top:4px;">Check what I'd need</button>
+    <div id="plan-output"></div>
+  `;
+  results.appendChild(plannerBlock);
+  plannerBlock.querySelector("#plan-res").value = resKey;
+
+  plannerBlock.querySelector("#plan-btn").addEventListener("click", () => {
+    const gName = plannerBlock.querySelector("#plan-game").value;
+    const targetFps = parseInt(plannerBlock.querySelector("#plan-fps").value, 10);
+    const planRes = plannerBlock.querySelector("#plan-res").value;
+    const game = GAMES.find(g => g.name === gName);
+    const { gpuReq, cpuReq } = requiredTierForFps(game, planRes, targetFps);
+    const out = plannerBlock.querySelector("#plan-output");
+
+    if (cpuTier === null || gpuTier === null) {
+      out.innerHTML = `<div class="rail"><div class="rail-item"><p>Enter both a CPU and GPU above and click Analyze first, then come back to this.</p></div></div>`;
+      return;
+    }
+
+    const needsGpu = gpuTier < gpuReq;
+    const needsCpu = cpuTier < cpuReq;
+
+    if (!needsGpu && !needsCpu) {
+      out.innerHTML = `<div class="rail"><div class="rail-item is-good"><p>Your current setup should already handle ~${targetFps} FPS in ${game.name} at ${RES_LABELS[planRes]}.</p></div></div>`;
+      return;
+    }
+
+    let html = `<div class="rail">`;
+    let plannedGpuTier = gpuTier;
+    let plannedCpuTier = cpuTier;
+
+    if (needsGpu) {
+      const filtered = suggestUpgrades(gpuTier, GPU_UPGRADES).filter(u => u.minTier >= gpuReq - 0.5);
+      const picks = (filtered.length ? filtered : suggestUpgrades(gpuTier, GPU_UPGRADES)).slice(0, 2);
+      const list = picks.map(s => `<li><span>${s.name}</span><span class="price">(${s.price})</span><a class="shop-link" href="${shopLink(s.name)}" target="_blank" rel="noopener noreferrer sponsored">View price</a></li>`).join("");
+      html += `<div class="rail-item is-priority"><p>To hit ~${targetFps} FPS in ${game.name} at ${RES_LABELS[planRes]}, your GPU needs to be stronger.</p><ul>${list}</ul></div>`;
+      if (picks.length) plannedGpuTier = picks[0].minTier;
+    }
+    if (needsCpu) {
+      const filtered = suggestUpgrades(cpuTier, CPU_UPGRADES).filter(u => u.minTier >= cpuReq - 0.5);
+      const picks = (filtered.length ? filtered : suggestUpgrades(cpuTier, CPU_UPGRADES)).slice(0, 2);
+      const list = picks.map(s => `<li><span>${s.name}</span><span class="price">(${s.price})</span><a class="shop-link" href="${shopLink(s.name)}" target="_blank" rel="noopener noreferrer sponsored">View price</a></li>`).join("");
+      html += `<div class="rail-item is-priority"><p>Your CPU would also need to be stronger to sustain ~${targetFps} FPS.</p><ul>${list}</ul></div>`;
+      if (picks.length) plannedCpuTier = picks[0].minTier;
+    }
+
+    // Does the upgraded combo outgrow the current PSU?
+    const shortfall = psuShortfall(plannedCpuTier, plannedGpuTier, psu);
+    if (shortfall) {
+      html += `<div class="rail-item is-warn"><p>That combo would draw roughly ${shortfall.estimatedDraw}W under load — above what your ${shortfall.psuW}W power supply comfortably handles. Budget for at least a ${shortfall.recommendedPsu}W supply too.</p></div>`;
+    }
+
+    // Does hitting this target FPS need a beefier monitor to actually see it?
+    if (targetFps >= 144) {
+      html += `<div class="rail-item is-warn"><p>Hitting ${targetFps} FPS only matters if your monitor can display it — you'd want a monitor rated at least ${targetFps}Hz (a 144Hz or 165Hz panel is common and affordable) to actually see those extra frames.</p></div>`;
+    }
+    if (planRes === "4k" && (!document.getElementById("usecase") || document.getElementById("usecase").value !== "4k")) {
+      html += `<div class="rail-item is-warn"><p>This target is set to 4K — double check your monitor is actually a 4K panel, since a 1080p or 1440p display can't show the extra detail even if your PC renders it.</p></div>`;
+    }
+
+    html += `</div>`;
+    out.innerHTML = html;
+  });
+
+  // Scroll so the score is actually visible — otherwise the page can sit
+  // in the same spot after clicking Analyze and it's easy to miss that
+  // anything happened.
+  setTimeout(() => {
+    scoreBlock.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 60);
+}
+
+// ================= Live-ish price trend chart =================
+// Simulated market index (random walk seeded on load, then ticks every
+// few seconds) — see the note under the chart for why this isn't wired
+// to real retail data.
+
+const TREND_SERIES = [
+  { key: "gpu", label: "GPU", color: "#e2665a", base: 100, vol: 2.4, drift: -0.035 },
+  { key: "cpu", label: "CPU", color: "#cf8a4f", base: 100, vol: 1.1, drift: -0.018 },
+  { key: "ram", label: "RAM", color: "#7fd1a0", base: 100, vol: 3.2, drift: 0.01 },
+  { key: "ssd", label: "SSD/NVMe", color: "#8fb3ff", base: 100, vol: 1.6, drift: -0.05 }
+];
+const TREND_LEN = 36;
+const trendData = {};
+const trendActive = {};
+let trendSecsAgo = 0;
+
+function seedTrend() {
+  TREND_SERIES.forEach(s => {
+    let v = s.base;
+    const arr = [];
+    for (let i = 0; i < TREND_LEN; i++) {
+      v += (Math.random() - 0.5) * s.vol + s.drift;
+      v = Math.max(20, v);
+      arr.push(v);
+    }
+    trendData[s.key] = arr;
+    trendActive[s.key] = true;
+  });
+}
+
+function tickTrend() {
+  TREND_SERIES.forEach(s => {
+    const arr = trendData[s.key];
+    let v = arr[arr.length - 1] + (Math.random() - 0.5) * s.vol + s.drift;
+    v = Math.max(20, v);
+    arr.push(v);
+    if (arr.length > TREND_LEN) arr.shift();
+  });
+  drawTrend();
+  trendSecsAgo = 0;
+  const el = document.getElementById("trend-updated");
+  if (el) el.textContent = "updated just now";
+}
+
+function drawGrid() {
+  const grid = document.getElementById("trend-grid");
+  if (!grid) return;
+  const W = 640, H = 210, rows = 4;
+  let html = "";
+  for (let i = 0; i <= rows; i++) {
+    const y = (H / rows) * i;
+    html += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`;
+  }
+  grid.innerHTML = html;
+}
+
+function drawTrend() {
+  const linesG = document.getElementById("trend-lines");
+  const dotsG = document.getElementById("trend-dots");
+  linesG.innerHTML = ""; dotsG.innerHTML = "";
+  const W = 640, H = 210, pad = 8;
+
+  let allVals = [];
+  TREND_SERIES.forEach(s => { if (trendActive[s.key]) allVals = allVals.concat(trendData[s.key]); });
+  if (allVals.length === 0) allVals = [0, 100];
+  const min = Math.min(...allVals), max = Math.max(...allVals);
+  const range = (max - min) || 1;
+
+  TREND_SERIES.forEach(s => {
+    const arr = trendData[s.key];
+    const pts = arr.map((v, i) => {
+      const x = pad + (i / (TREND_LEN - 1)) * (W - pad * 2);
+      const y = H - pad - ((v - min) / range) * (H - pad * 2);
+      return x.toFixed(1) + "," + y.toFixed(1);
+    }).join(" ");
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    line.setAttribute("points", pts);
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", s.color);
+    line.setAttribute("stroke-width", "2");
+    line.setAttribute("filter", "url(#trend-glow)");
+    line.style.opacity = trendActive[s.key] ? "0.95" : "0.08";
+    linesG.appendChild(line);
+
+    const lastIdx = arr.length - 1;
+    const lx = pad + (lastIdx / (TREND_LEN - 1)) * (W - pad * 2);
+    const ly = H - pad - ((arr[lastIdx] - min) / range) * (H - pad * 2);
+    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx", lx); dot.setAttribute("cy", ly); dot.setAttribute("r", "3.5");
+    dot.setAttribute("fill", s.color);
+    dot.style.opacity = trendActive[s.key] ? "1" : "0.1";
+    dotsG.appendChild(dot);
+  });
+
+  updateTrendLegend();
+}
+
+function updateTrendLegend() {
+  const wrap = document.getElementById("trend-legend");
+  wrap.innerHTML = TREND_SERIES.map(s => {
+    const arr = trendData[s.key];
+    const cur = arr[arr.length - 1];
+    const prev = arr.length > 1 ? arr[arr.length - 2] : cur;
+    const pct = prev ? ((cur - prev) / prev) * 100 : 0;
+    const sign = pct >= 0 ? "+" : "";
+    const dirColor = pct >= 0 ? "var(--alert)" : "var(--signal)";
+    return `<button type="button" class="legend-chip${trendActive[s.key] ? " active" : ""}" data-key="${s.key}" style="--chip-color:${s.color}">
+      <span class="chip-dot"></span><span>${s.label}</span><span class="chip-delta" style="color:${dirColor}">${sign}${pct.toFixed(1)}%</span>
+    </button>`;
+  }).join("");
+  wrap.querySelectorAll(".legend-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const k = btn.dataset.key;
+      trendActive[k] = !trendActive[k];
+      drawTrend();
+    });
+  });
+}
+
+const trendEl = document.getElementById("trend-grid");
+if (trendEl) {
+  drawGrid();
+  seedTrend();
+  drawTrend();
+  setInterval(tickTrend, 3000);
+  setInterval(() => {
+    trendSecsAgo++;
+    const el = document.getElementById("trend-updated");
+    if (el && trendSecsAgo > 0) el.textContent = "updated " + trendSecsAgo + "s ago";
+  }, 1000);
+}
+</script>
+
+</body>
+</html>
